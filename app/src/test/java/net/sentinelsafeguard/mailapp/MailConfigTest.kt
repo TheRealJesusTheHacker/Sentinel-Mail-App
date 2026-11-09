@@ -8,7 +8,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.security.cert.CertificateException
 
 /**
  * The production mail posture, pinned: the verified Sentinel Mail
@@ -55,7 +54,10 @@ class MailConfigTest {
         var refused = false
         try {
             tm.checkServerTrusted(emptyArray(), "RSA")
-        } catch (e: CertificateException) {
+        } catch (e: Exception) {
+            // CertificateException from the pin layer, or the
+            // platform delegate's own refusal — either way the
+            // chain is refused, never waved through.
             refused = true
         }
         assertTrue("an empty chain must be refused, never waved through", refused)

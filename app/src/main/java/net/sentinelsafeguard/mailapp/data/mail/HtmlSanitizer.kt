@@ -40,6 +40,12 @@ object HtmlSanitizer {
 
     private val VOID = setOf("br", "hr", "img")
 
+    /** DROP_WHOLE tags that are HTML void elements: they never
+     * have content or a closing tag, so they must not move the
+     * drop-depth counter — an unclosed <input> inside a dropped
+     * <form> would otherwise swallow the rest of the message. */
+    private val DROP_VOID = setOf("base", "embed", "input", "link", "meta", "source")
+
     fun sanitize(html: String): String {
         val out = StringBuilder(html.length)
         var i = 0
@@ -52,6 +58,16 @@ object HtmlSanitizer {
                 break
             }
             if (dropDepth == 0 && lt > i) out.append(escapeText(html.substring(i, lt)))
+            // A '<' that cannot start a tag (not followed by a
+            // letter, '/', '!', or '?') is literal text — HTML's
+            // own rule; treating it as a tag would swallow the
+            // text that follows it.
+            val after = html.getOrNull(lt + 1)
+            if (after == null || !(after.isLetter() || after == '/' || after == '!' || after == '?')) {
+                if (dropDepth == 0) out.append("&lt;")
+                i = lt + 1
+                continue
+            }
             // Comments and declarations: dropped.
             if (html.startsWith("<!--", lt)) {
                 val end = html.indexOf("-->", lt + 4)
@@ -73,8 +89,8 @@ object HtmlSanitizer {
             if (name.isEmpty()) continue
             if (name in DROP_WHOLE) {
                 if (closing) {
-                    if (dropDepth > 0) dropDepth--
-                } else if (!selfClosing) {
+                    if (dropDepth > 0 && name !in DROP_VOID) dropDepth--
+                } else if (!selfClosing && name !in DROP_VOID) {
                     dropDepth++
                 }
                 continue
