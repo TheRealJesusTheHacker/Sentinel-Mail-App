@@ -1,0 +1,19 @@
+# Build output
+.gradle/
+build/
+app/build/
+local.properties
+
+# Signing material — NEVER committed. The owner's keystore lives in
+# custody and reaches builds only through environment secrets.
+*.p12
+*.jks
+*.keystore
+
+# R8 mapping files are deobfuscation keys — CI artifacts only.
+mapping/
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
