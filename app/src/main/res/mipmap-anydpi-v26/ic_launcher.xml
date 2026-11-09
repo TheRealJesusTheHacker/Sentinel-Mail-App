@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon: brand-black background + the owner's real logo
+     lockup as the foreground (raster PNGs generated from
+     your_files/brand/sentinel-safeguard-logo.jpg; see
+     LauncherIconTest for the byte pins). No monochrome layer: a
+     monochrome rendering would require redrawing the lockup,
+     which the LOGO RULE forbids; themed rendering falls back to
+     the full icon. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

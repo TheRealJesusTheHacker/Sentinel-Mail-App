@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sentinel Mail</string>
+    <string name="notification_channel_new_mail">New mail</string>
+    <string name="notification_channel_new_mail_desc">Checks your mailbox on a schedule you choose and tells you about new mail. Checking is periodic — this is not push.</string>
+</resources>
