@@ -56,7 +56,9 @@ class MainActivity : FragmentActivity() {
     private fun readDeepLink(intent: Intent?) {
         val folder = intent?.getStringExtra(Notifier.EXTRA_FOLDER)?.takeIf { it.isNotBlank() }
         val uid = intent?.getLongExtra(Notifier.EXTRA_UID, -1L)?.takeIf { it > 0 }
-        if (folder != null && uid != null) {
+        // Folder-with-UID opens the message; folder alone (the
+        // 1.2.0 summary notification) opens that folder's list.
+        if (folder != null) {
             deepLinkFolder = folder
             deepLinkUid = uid
             deepLinkNonce++

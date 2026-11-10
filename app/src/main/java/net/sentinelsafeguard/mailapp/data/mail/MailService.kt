@@ -63,10 +63,14 @@ import java.util.Properties
  * can drive THIS engine against a local fake server. The app only
  * ever builds `MailConfig.production`. A unit test pins that.
  *
- * Cache rule (family rule, unchanged): message lists live in
- * memory only, for the one open folder, and are dropped on
- * sign-out via [clearCache]. Nothing mail-shaped is written to
- * disk by this class.
+ * Cache rule: THIS class still writes nothing to disk — its
+ * in-memory list cache (one open folder, dropped on sign-out via
+ * [clearCache]) is unchanged. 1.2.0 adds a separate, deliberate
+ * layer: the ViewModel-owned offline disk cache
+ * (data/cache/MailCache), encrypted at rest, which is what makes
+ * the mailbox browsable with no connection. The old
+ * "memory-only" family rule is replaced BY THAT CLASS, on the
+ * record — see PROGRAM-RECORD's 1.2.0 section.
  */
 class MailService(
     private val config: MailConfig,
@@ -216,6 +220,12 @@ class MailService(
                     add(FetchProfile.Item.ENVELOPE)
                     add(FetchProfile.Item.FLAGS)
                     add(FetchProfile.Item.CONTENT_INFO)
+                    // Threading headers (1.2.0): fetched with the
+                    // envelope so the list can group conversations
+                    // without opening individual messages.
+                    add("Message-ID")
+                    add("In-Reply-To")
+                    add("References")
                 }
                 folder.fetch(messages, profile)
                 val uidFolder = folder as jakarta.mail.UIDFolder
@@ -235,6 +245,13 @@ class MailService(
                         starred = message.isSet(Flags.Flag.FLAGGED),
                         hasAttachments = runCatching { structureHasAttachments(message) }
                             .getOrDefault(false),
+                        folderName = folderName,
+                        messageId = runCatching { message.getHeader("Message-ID")?.firstOrNull() }
+                            .getOrNull(),
+                        inReplyTo = runCatching { message.getHeader("In-Reply-To")?.firstOrNull() }
+                            .getOrNull(),
+                        references = runCatching { message.getHeader("References")?.firstOrNull() }
+                            .getOrNull(),
                     )
                 }
                 cachedFolder = folderName
@@ -351,12 +368,222 @@ class MailService(
                         snippet = "",
                         starred = message.isSet(Flags.Flag.FLAGGED),
                         hasAttachments = false,
+                        folderName = folderName,
+                        messageId = runCatching { message.getHeader("Message-ID")?.firstOrNull() }
+                            .getOrNull(),
                     )
                 }
             } finally {
                 folder.close(false)
             }
         }
+    }
+
+    /**
+     * SEARCH ACROSS ALL FOLDERS (1.2.0). The same server-side
+     * subject/from/body search, run folder by folder over the
+     * mailbox's real folder list, merged by [SearchMerge]
+     * (round-robin, capped, every result folder-labeled). A
+     * folder the server refuses is reported in the result, not
+     * silently skipped — the UI states the searched scope.
+     */
+    suspend fun searchAll(
+        username: String,
+        password: String,
+        query: String,
+        folderNames: List<String>,
+    ): AllFolderSearch = withContext(Dispatchers.IO) {
+        val perFolder = mutableListOf<List<MailSummary>>()
+        val searched = mutableListOf<String>()
+        val failed = mutableListOf<String>()
+        for (name in folderNames) {
+            try {
+                perFolder += search(username, password, name, query, SearchMerge.PER_FOLDER_CAP)
+                searched += name
+            } catch (e: Exception) {
+                failed += name
+            }
+        }
+        AllFolderSearch(
+            results = SearchMerge.merge(perFolder),
+            searchedFolders = searched,
+            failedFolders = failed,
+            capped = perFolder.sumOf { it.size } > SearchMerge.TOTAL_CAP,
+        )
+    }
+
+    // ---- folder management (1.2.0) ----
+    //
+    // The app-side rails live in MailRules.manageRail; these are
+    // the raw operations. Refusals from the server surface as
+    // exceptions carrying the server's answer, which is exactly
+    // what the UI reports — for shared folders that refusal IS
+    // the estate's ACL speaking.
+
+    /** Create a personal folder (parents are created by the
+     * server as needed, per Dovecot's CREATE semantics). */
+    suspend fun createFolder(username: String, password: String, fullName: String) =
+        withContext(Dispatchers.IO) {
+            withStore(username, password) { store ->
+                val folder = store.getFolder(fullName)
+                if (folder.exists()) {
+                    throw IllegalStateException("A folder with that name already exists.")
+                }
+                if (!folder.create(Folder.HOLDS_MESSAGES)) {
+                    throw IllegalStateException("The server refused to create that folder.")
+                }
+                invalidateCache()
+            }
+        }
+
+    suspend fun renameFolder(username: String, password: String, from: String, to: String) =
+        withContext(Dispatchers.IO) {
+            withStore(username, password) { store ->
+                val source = store.getFolder(from)
+                if (!source.exists()) {
+                    throw IllegalStateException("That folder could not be found.")
+                }
+                val target = store.getFolder(to)
+                if (target.exists()) {
+                    throw IllegalStateException("A folder with that name already exists.")
+                }
+                if (!source.renameTo(target)) {
+                    throw IllegalStateException("The server refused to rename that folder.")
+                }
+                invalidateCache()
+            }
+        }
+
+    /** Delete a folder and everything in it (recursive). The UI
+     * confirms with the message count before this is called. */
+    suspend fun deleteFolder(username: String, password: String, fullName: String) =
+        withContext(Dispatchers.IO) {
+            withStore(username, password) { store ->
+                val folder = store.getFolder(fullName)
+                if (!folder.exists()) {
+                    throw IllegalStateException("That folder could not be found.")
+                }
+                if (!folder.delete(true)) {
+                    throw IllegalStateException("The server refused to delete that folder.")
+                }
+                invalidateCache()
+            }
+        }
+
+    /**
+     * The server's storage answer for this mailbox (1.2.0), or
+     * null when the server does not answer GETQUOTAROOT in a form
+     * that carries a STORAGE resource. The Settings surface
+     * exists only when this returns a value — no estimate, no
+     * placeholder.
+     */
+    suspend fun quota(username: String, password: String): MailQuota? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                withStore(username, password) { store ->
+                    val folder = store.getFolder("INBOX")
+                    folder.open(Folder.READ_ONLY)
+                    try {
+                        val quotas = (folder as? IMAPFolder)?.getQuota()
+                            ?: return@withStore null
+                        val storage = quotas.firstNotNullOfOrNull { quota ->
+                            quota.resources?.firstOrNull {
+                                it.name.equals("STORAGE", ignoreCase = true)
+                            }
+                        } ?: return@withStore null
+                        MailQuota(usedKb = storage.usage, limitKb = storage.limit)
+                    } finally {
+                        folder.close(false)
+                    }
+                }
+            }.getOrNull()
+        }
+
+    /**
+     * The message's own inline (Content-ID) parts (1.2.0), for
+     * the formatted view's in-place rendering. These bytes came
+     * WITH the message — nothing is fetched from the network to
+     * render them. Capped per part and in total; oversized parts
+     * are simply not returned (the view then shows its
+     * broken-image frame, the honest outcome).
+     */
+    suspend fun inlineImages(
+        username: String,
+        password: String,
+        folderName: String,
+        uid: Long,
+    ): Map<String, InlineImages.Part> = withContext(Dispatchers.IO) {
+        withStore(username, password) { store ->
+            val folder = store.getFolder(folderName)
+            folder.open(Folder.READ_ONLY)
+            try {
+                val uidFolder = folder as jakarta.mail.UIDFolder
+                val message = uidFolder.getMessageByUID(uid) ?: return@withStore emptyMap()
+                val out = LinkedHashMap<String, InlineImages.Part>()
+                var totalBytes = 0
+                for (part in collectParts(message)) {
+                    val cid = runCatching {
+                        part.getHeader("Content-ID")?.firstOrNull()
+                    }.getOrNull() ?: continue
+                    val mime = runCatching { part.contentType.substringBefore(';').trim() }
+                        .getOrDefault("")
+                    if (!mime.startsWith("image/", ignoreCase = true)) continue
+                    if (isAttachment(part)) continue
+                    val bytes = runCatching {
+                        part.inputStream.use { readCapped(it, MAX_INLINE_IMAGE_BYTES) }
+                    }.getOrNull() ?: continue
+                    if (totalBytes + bytes.size > MAX_INLINE_TOTAL_BYTES) continue
+                    totalBytes += bytes.size
+                    out[InlineImages.normalize(cid)] = InlineImages.Part(mime, bytes)
+                }
+                out
+            } finally {
+                folder.close(false)
+            }
+        }
+    }
+
+    /** Locate a message by its Message-ID inside [folderName]
+     * (1.2.0 — snooze's return path: UIDs do not survive moves,
+     * Message-IDs do). Null when it is not there anymore. */
+    suspend fun findUidByMessageId(
+        username: String,
+        password: String,
+        folderName: String,
+        messageId: String,
+    ): Long? = withContext(Dispatchers.IO) {
+        runCatching {
+            withStore(username, password) { store ->
+                val folder = store.getFolder(folderName)
+                if (!folder.exists()) return@withStore null
+                folder.open(Folder.READ_ONLY)
+                try {
+                    val found = folder.search(
+                        jakarta.mail.search.MessageIDTerm(messageId),
+                    )
+                    val uidFolder = folder as jakarta.mail.UIDFolder
+                    found.firstOrNull()?.let { uidFolder.getUID(it) }
+                } finally {
+                    folder.close(false)
+                }
+            }
+        }.getOrNull()
+    }
+
+    /** Move a message identified by Message-ID (see above).
+     * False when the message is gone — the snooze record is then
+     * dropped, because there is nothing left to return. */
+    suspend fun moveByMessageId(
+        username: String,
+        password: String,
+        fromFolder: String,
+        messageId: String,
+        toFolder: String,
+    ): Boolean {
+        val uid = findUidByMessageId(username, password, fromFolder, messageId)
+            ?: return false
+        move(username, password, fromFolder, uid, toFolder)
+        return true
     }
 
     /** Archive = move to the keep-forever folder. */
@@ -408,6 +635,11 @@ class MailService(
                 val message = uidFolder.getMessageByUID(uid)
                     ?: throw IllegalStateException("That message could not be found. It may have been moved or deleted — go back and refresh the list.")
                 val target = store.getFolder(toFolder)
+                // A move target that does not exist yet is created
+                // (the Snoozed folder above all, and Archive/Trash
+                // on a fresh mailbox) — the same pattern send()
+                // already used for Sent.
+                if (!target.exists()) target.create(Folder.HOLDS_MESSAGES)
                 source.copyMessages(arrayOf<Message>(message), target)
                 message.setFlag(Flags.Flag.DELETED, true)
                 invalidateCache()
@@ -726,5 +958,22 @@ class MailService(
          * verified in the live EHLO on 2026-11-09). */
         const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
         const val SNIPPET_READ_CAP = 8192
+
+        /** Inline-image caps (1.2.0): one part, then the whole
+         * message's set. Generous for real mail (logos and inline
+         * photos are tens of KB), hard against a hostile part. */
+        const val MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024
+        const val MAX_INLINE_TOTAL_BYTES = 10 * 1024 * 1024
     }
 }
+
+/** The all-folders search report (1.2.0): the merged results,
+ * which folders were actually searched, which refused, and
+ * whether the cap trimmed the total — the UI states all of it,
+ * so the scope on screen is the scope that ran. */
+data class AllFolderSearch(
+    val results: List<MailSummary>,
+    val searchedFolders: List<String>,
+    val failedFolders: List<String>,
+    val capped: Boolean,
+)

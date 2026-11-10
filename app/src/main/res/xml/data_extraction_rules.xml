@@ -2,8 +2,14 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="sentinel_mail_secure_store.xml" />
+        <!-- 1.2.0: the offline mail cache is device-local by
+             design (its encryption key never leaves the Keystore,
+             so a restored copy would be undecryptable anyway) —
+             it does not ride backups. -->
+        <exclude domain="file" path="mailcache/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="sentinel_mail_secure_store.xml" />
+        <exclude domain="file" path="mailcache/" />
     </device-transfer>
 </data-extraction-rules>

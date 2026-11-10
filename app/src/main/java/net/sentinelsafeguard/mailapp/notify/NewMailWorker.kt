@@ -51,19 +51,40 @@ class NewMailWorker(
                     val fresh = service
                         .listMessages(account.address, account.password, "INBOX", limit = 25)
                         .filter { it.uid > lastUid && it.unread }
-                        .take(MAX_NOTIFICATIONS)
-                    for (summary in fresh) {
-                        Notifier.notifyNewMail(
-                            applicationContext,
-                            folder = "INBOX",
-                            uid = summary.uid,
-                            from = summary.from,
-                            subject = summary.subject,
-                        )
+                    if (settings.notificationsEnabled) {
+                        // One arrival gets its own tappable
+                        // notification; a batch gets ONE summary
+                        // (count + senders) — a stack of singles
+                        // for a busy minute is noise, not signal.
+                        if (fresh.size == 1) {
+                            val only = fresh.single()
+                            Notifier.notifyNewMail(
+                                applicationContext,
+                                folder = "INBOX",
+                                uid = only.uid,
+                                from = only.from,
+                                subject = only.subject,
+                            )
+                        } else if (fresh.isNotEmpty()) {
+                            Notifier.notifyNewMailSummary(
+                                applicationContext,
+                                folder = "INBOX",
+                                count = fresh.size,
+                                senders = fresh.map { it.from },
+                            )
+                        }
                     }
+                    // The baseline advances either way: with the
+                    // switch off, mail is accounted for silently
+                    // so re-enabling never dumps the backlog.
                     settings.lastSeenInboxUid = maxUid
                 }
             }
+            // Snoozed mail rides this same tick (1.2.0): the
+            // checker's cadence is the return cadence, disclosed
+            // as approximate in the snooze dialog itself. Its own
+            // failure never fails the check.
+            runCatching { SnoozeProcessor.processDue(applicationContext) }
             Result.success()
         } catch (e: Exception) {
             // A failed check is a quiet retry later, never a
@@ -74,7 +95,6 @@ class NewMailWorker(
 
     companion object {
         private const val WORK_NAME = "sentinel_mail_periodic_check"
-        private const val MAX_NOTIFICATIONS = 5
 
         /** (Re)schedule to match the setting; 0 minutes = manual
          * only, which cancels the periodic work outright. */

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The encrypted credential store never leaves the device. -->
+<!-- The encrypted credential store never leaves the device.
+     1.2.0 adds the offline mail cache: same rule, same reason. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="sentinel_mail_secure_store.xml" />
+    <exclude domain="file" path="mailcache/" />
 </full-backup-content>

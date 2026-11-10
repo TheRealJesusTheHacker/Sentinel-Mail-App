@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
@@ -62,14 +63,14 @@ fun SignInScreen(viewModel: MailViewModel) {
         Spacer(Modifier.height(24.dp))
         Image(
             painter = painterResource(R.drawable.sentinel_logo),
-            contentDescription = "Sentinel Safeguard",
+            contentDescription = stringResource(R.string.logo_description),
             modifier = Modifier.size(140.dp),
         )
         Spacer(Modifier.height(16.dp))
-        Text("Sentinel Mail", style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.signin_title), style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Your mail, straight from your own server. This app talks directly to Sentinel Mail — no middleman, no copy anywhere else.",
+            stringResource(R.string.signin_subtitle_long),
             color = SentinelMuted,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -77,7 +78,7 @@ fun SignInScreen(viewModel: MailViewModel) {
         OutlinedTextField(
             value = address,
             onValueChange = { address = it.trim() },
-            label = { Text("Email address") },
+            label = { Text(stringResource(R.string.signin_address)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth(),
@@ -86,19 +87,19 @@ fun SignInScreen(viewModel: MailViewModel) {
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Password") },
+            label = { Text(stringResource(R.string.signin_password)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
         TextButton(onClick = { showAdvanced = !showAdvanced }) {
-            Text(if (showAdvanced) "Hide advanced server settings" else "Advanced server settings")
+            Text(stringResource(if (showAdvanced) R.string.signin_advanced_hide else R.string.signin_advanced))
         }
         AnimatedVisibility(visible = showAdvanced) {
             Column(Modifier.fillMaxWidth()) {
                 Text(
-                    "Pre-set for Sentinel Mail. Change these only for another mailbox on a different server.",
+                    stringResource(R.string.signin_advanced_explainer),
                     color = SentinelMuted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -106,7 +107,7 @@ fun SignInScreen(viewModel: MailViewModel) {
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it.trim() },
-                    label = { Text("Server (default mail.sentinelsafeguard.net)") },
+                    label = { Text(stringResource(R.string.signin_host_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -114,7 +115,7 @@ fun SignInScreen(viewModel: MailViewModel) {
                 OutlinedTextField(
                     value = imapPort,
                     onValueChange = { imapPort = it.filter { c -> c.isDigit() } },
-                    label = { Text("IMAP port (default 993, TLS)") },
+                    label = { Text(stringResource(R.string.signin_imap_label)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -123,7 +124,7 @@ fun SignInScreen(viewModel: MailViewModel) {
                 OutlinedTextField(
                     value = smtpPort,
                     onValueChange = { smtpPort = it.filter { c -> c.isDigit() } },
-                    label = { Text("SMTP submission port (default 587)") },
+                    label = { Text(stringResource(R.string.signin_smtp_label)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -163,12 +164,12 @@ fun SignInScreen(viewModel: MailViewModel) {
                     modifier = Modifier.size(18.dp),
                 )
             } else {
-                Text("Sign in")
+                Text(stringResource(R.string.signin_button))
             }
         }
         Spacer(Modifier.height(14.dp))
         Text(
-            "Your password is stored only in this phone's secure storage and is only ever sent to the mail server, over an encrypted connection.",
+            stringResource(R.string.signin_privacy_line),
             color = SentinelMuted,
             style = MaterialTheme.typography.bodyMedium,
         )

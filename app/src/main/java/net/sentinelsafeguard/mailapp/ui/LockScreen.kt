@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.res.stringResource
 import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
@@ -67,7 +68,7 @@ fun LockScreen(viewModel: MailViewModel) {
                 // setup steers owners to set a PIN for this case.)
                 viewModel.unlock()
             } else {
-                error = "Biometrics aren't available on this device right now. Use your PIN."
+                error = context.getString(R.string.lock_biometric_unavailable)
             }
             return
         }
@@ -89,12 +90,12 @@ fun LockScreen(viewModel: MailViewModel) {
             },
         )
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Sentinel Mail is locked")
-            .setSubtitle("Unlock to read your mail")
+            .setTitle(context.getString(R.string.lock_title))
+            .setSubtitle(context.getString(R.string.lock_subtitle))
             .setAllowedAuthenticators(authenticators)
             .apply {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                    setNegativeButtonText("Use PIN")
+                    setNegativeButtonText(context.getString(R.string.lock_use_pin))
                 }
             }
             .build()
@@ -110,14 +111,14 @@ fun LockScreen(viewModel: MailViewModel) {
     ) {
         Image(
             painter = painterResource(R.drawable.sentinel_logo),
-            contentDescription = "Sentinel Safeguard",
+            contentDescription = stringResource(R.string.logo_description),
             modifier = Modifier.size(120.dp),
         )
         Spacer(Modifier.height(20.dp))
-        Text("Sentinel Mail is locked", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.lock_title), style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Your mail stays on the server and your password stays in this phone's secure storage.",
+            stringResource(R.string.lock_body),
             color = SentinelMuted,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -125,13 +126,13 @@ fun LockScreen(viewModel: MailViewModel) {
         Button(
             onClick = { tryBiometric() },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Unlock with biometrics") }
+        ) { Text(stringResource(R.string.lock_unlock_biometrics)) }
         if (hasPin) {
             Spacer(Modifier.height(20.dp))
             OutlinedTextField(
                 value = pin,
                 onValueChange = { pin = it; error = null },
-                label = { Text("App PIN") },
+                label = { Text(stringResource(R.string.lock_pin_hint)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -147,12 +148,12 @@ fun LockScreen(viewModel: MailViewModel) {
                     if (viewModel.secureStore.checkPin(pin)) {
                         viewModel.unlock()
                     } else {
-                        error = "That PIN doesn't match."
+                        error = context.getString(R.string.lock_pin_mismatch)
                     }
                 },
                 enabled = pin.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Unlock with PIN") }
+            ) { Text(stringResource(R.string.lock_unlock_pin)) }
         } else if (error != null) {
             Spacer(Modifier.height(12.dp))
             Text(error!!, color = MaterialTheme.colorScheme.error)

@@ -64,8 +64,14 @@ fun AppRoot(
     var route by remember { mutableStateOf<Route>(Route.Folders) }
 
     LaunchedEffect(deepLinkNonce) {
-        if (deepLinkFolder != null && deepLinkUid != null) {
-            route = Route.Read(deepLinkFolder, deepLinkUid)
+        if (deepLinkFolder != null) {
+            route = if (deepLinkUid != null) {
+                Route.Read(deepLinkFolder, deepLinkUid)
+            } else {
+                // The summary notification names a folder, not a
+                // message: land on its list.
+                Route.Messages(deepLinkFolder)
+            }
             onDeepLinkConsumed()
         }
     }
@@ -109,7 +115,9 @@ fun AppRoot(
                 viewModel,
                 folder = r.folder,
                 onBack = { route = Route.Folders },
-                onOpenMessage = { uid -> route = Route.Read(r.folder, uid) },
+                // A result from an all-folders search opens in ITS
+                // folder, not the one the search started from.
+                onOpenMessage = { folderName, uid -> route = Route.Read(folderName, uid) },
                 onCompose = { route = Route.Compose(ComposeInit.New(r.folder)) },
                 onOpenDraft = { model -> route = Route.Compose(ComposeInit.FromDraft(model)) },
             )

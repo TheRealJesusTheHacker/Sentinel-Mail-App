@@ -37,6 +37,7 @@ object MailRules {
     const val SENT_FOLDER = "Sent"
     const val DRAFTS_FOLDER = "Drafts"
     const val JUNK_FOLDER = "Junk"
+    const val SNOOZED_FOLDER = "Snoozed"
 
     fun isSharedFolder(folderName: String): Boolean =
         folderName.equals(SHARED_PREFIX, ignoreCase = true) ||
@@ -59,6 +60,60 @@ object MailRules {
     fun sentTarget(): String = SENT_FOLDER
 
     fun draftsTarget(): String = DRAFTS_FOLDER
+
+    /** Where snoozed mail waits (1.2.0). A real folder on the
+     * server, so webmail sees the same state as the app. */
+    fun snoozedTarget(): String = SNOOZED_FOLDER
+
+    // ---- folder management rails (1.2.0) ----
+
+    /**
+     * Whether rename/delete may be attempted on a folder:
+     * - [BLOCKED_SPECIAL]: the folder carries a working role
+     *   (by SPECIAL-USE flag or by name — Inbox, Sent, Drafts,
+     *   Archive, Trash, Junk). Renaming or deleting the mailbox's
+     *   own furniture is refused HERE, with the reason named,
+     *   before the server is ever asked.
+     * - [SERVER_DECIDES]: a shared folder. The app holds no proof
+     *   of the owner's ACL grant, so the attempt goes to the
+     *   server and the server's answer — success or refusal — is
+     *   what the UI reports. Nothing is faked either way.
+     * - [ALLOWED]: an ordinary personal folder. The server is
+     *   still the final word; the app simply has no rail against.
+     */
+    enum class ManageRail { ALLOWED, BLOCKED_SPECIAL, SERVER_DECIDES }
+
+    fun manageRail(folderName: String, attributes: Set<String> = emptySet()): ManageRail =
+        when {
+            roleOf(folderName, attributes) != Role.OTHER -> ManageRail.BLOCKED_SPECIAL
+            isSharedFolder(folderName) -> ManageRail.SERVER_DECIDES
+            else -> ManageRail.ALLOWED
+        }
+
+    /** Why a proposed new-folder name is not acceptable, or null
+     * when it is. Deliberately conservative: the name becomes a
+     * real mailbox on the server. */
+    enum class NameProblem { BLANK, TOO_LONG, EMPTY_SEGMENT, SHARED_NAMESPACE, BAD_CHARS }
+
+    fun validateFolderName(name: String): NameProblem? {
+        val trimmed = name.trim()
+        return when {
+            trimmed.isEmpty() -> NameProblem.BLANK
+            trimmed.length > 64 -> NameProblem.TOO_LONG
+            // The "Shared" namespace is the mesh's, not the
+            // creator's: anything whose FIRST segment is exactly
+            // "Shared" would render and behave as a shared folder.
+            isSharedFolder(trimmed) ||
+                trimmed.split(delimiterOf(trimmed)).firstOrNull()
+                    ?.equals("Shared", ignoreCase = true) == true ->
+                NameProblem.SHARED_NAMESPACE
+            trimmed.any { it.code < 0x20 || it == '"' || it == '%' || it == '*' } ->
+                NameProblem.BAD_CHARS
+            trimmed.split(delimiterOf(trimmed)).any { it.isEmpty() } ->
+                NameProblem.EMPTY_SEGMENT
+            else -> null
+        }
+    }
 
     // ---- canonical folder identity (1.1.0) ----
 

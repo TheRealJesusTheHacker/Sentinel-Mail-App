@@ -1,9 +1,13 @@
 package net.sentinelsafeguard.mailapp.ui
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Forward
@@ -28,8 +33,10 @@ import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material.icons.filled.ReplyAll
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -41,7 +48,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -53,18 +62,31 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import java.io.File
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import kotlinx.coroutines.launch
+import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.data.mail.HtmlSanitizer
+import net.sentinelsafeguard.mailapp.data.mail.ImagePolicy
+import net.sentinelsafeguard.mailapp.data.mail.InlineImages
+import net.sentinelsafeguard.mailapp.data.mail.MailAttachment
 import net.sentinelsafeguard.mailapp.data.mail.MailMessage
 import net.sentinelsafeguard.mailapp.data.mail.MailRules
+import net.sentinelsafeguard.mailapp.data.mail.MailSummary
 import net.sentinelsafeguard.mailapp.data.mail.MailText
+import net.sentinelsafeguard.mailapp.data.mail.SnoozeLogic
+import net.sentinelsafeguard.mailapp.ui.theme.SentinelAmber
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
+import net.sentinelsafeguard.mailapp.ui.theme.SentinelSurfaceTop
 
 /**
  * One open message. The default view is the family's audited
@@ -92,22 +114,75 @@ fun MessageReadScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var formatted by remember { mutableStateOf(false) }
     var loadImages by remember { mutableStateOf(false) }
+    var senderAutoLoad by remember { mutableStateOf(false) }
+    var inlineParts by remember { mutableStateOf<Map<String, InlineImages.Part>>(emptyMap()) }
     var menuOpen by remember { mutableStateOf(false) }
     var moveOpen by remember { mutableStateOf(false) }
+    var snoozeOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var loadNonce by remember { mutableStateOf(0) }
+    // 1.2.0: whether the message on screen is the offline cache's
+    // saved copy, and when it was saved.
+    var fromCache by remember { mutableStateOf(false) }
+    var savedAtMs by remember { mutableStateOf(0L) }
+    // Attachment save/preview state (1.2.0).
+    var pendingSave by remember { mutableStateOf<MailAttachment?>(null) }
+    var preview by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var note by remember { mutableStateOf<String?>(null) }
+
+    val saveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*"),
+    ) { uri ->
+        val att = pendingSave
+        pendingSave = null
+        if (uri == null || att == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                val bytes = viewModel.downloadAttachment(folder, uid, att.partIndex)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: throw IllegalStateException("No output stream.")
+                note = context.getString(R.string.attachment_saved)
+            } catch (e: Exception) {
+                error = context.getString(R.string.attachment_save_failed)
+            }
+        }
+    }
 
     LaunchedEffect(folder, uid, loadNonce) {
         try {
             val loaded = viewModel.loadMessage(folder, uid)
-            message = loaded
-            if (loaded.unread) {
-                runCatching { viewModel.setSeen(folder, uid, true) }
-                message = loaded.copy(unread = false)
+            message = loaded.message
+            fromCache = loaded.fromCache
+            savedAtMs = loaded.savedAtMs
+            // Per-sender image memory (1.2.0): a remembered
+            // sender's remote images load with the message.
+            senderAutoLoad = ImagePolicy.shouldAutoLoad(
+                loaded.message.from,
+                viewModel.settingsStore.alwaysLoadImageSenders,
+            )
+            if (senderAutoLoad) loadImages = true
+            if (!loaded.fromCache && loaded.message.unread) {
+                // The engine marks SEEN as it fetches; this state
+                // copy keeps the header honest and refreshes the
+                // folder badges. A cached copy never runs this —
+                // offline cannot mark anything read, and doesn't
+                // pretend to.
+                message = loaded.message.copy(unread = false)
                 viewModel.loadFolders()
             }
         } catch (e: Exception) {
             error = MailViewModel.friendlyError(e)
+        }
+    }
+
+    // CID parts ride with the formatted view (1.2.0): fetched
+    // when the reader opens the formatted rendering, never
+    // before, and never from the network — they are the
+    // message's own bytes.
+    LaunchedEffect(formatted, message?.uid) {
+        if (formatted && message?.htmlBody != null && inlineParts.isEmpty() && !fromCache) {
+            inlineParts = runCatching { viewModel.inlineImages(folder, uid) }
+                .getOrDefault(emptyMap())
         }
     }
 
@@ -132,7 +207,10 @@ fun MessageReadScreen(
                 title = { Text(MailRules.displayName(folder)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back to the list")
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.read_back_list),
+                        )
                     }
                 },
                 actions = {
@@ -150,17 +228,22 @@ fun MessageReadScreen(
                         }) {
                             Icon(
                                 if (msg.starred) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                contentDescription = if (msg.starred) "Remove star" else "Star",
+                                contentDescription = stringResource(
+                                    if (msg.starred) R.string.unstar else R.string.star,
+                                ),
                             )
                         }
                     }
                     Box {
                         IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = stringResource(R.string.more_actions),
+                            )
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
-                                text = { Text("Mark as unread") },
+                                text = { Text(stringResource(R.string.read_mark_unread)) },
                                 leadingIcon = { Icon(Icons.Filled.MarkEmailUnread, null) },
                                 onClick = {
                                     menuOpen = false
@@ -168,12 +251,17 @@ fun MessageReadScreen(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Move to folder…") },
+                                text = { Text(stringResource(R.string.snooze)) },
+                                leadingIcon = { Icon(Icons.Filled.Bedtime, null) },
+                                onClick = { menuOpen = false; snoozeOpen = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.read_move_to)) },
                                 leadingIcon = { Icon(Icons.Filled.DriveFileMove, null) },
                                 onClick = { menuOpen = false; moveOpen = true },
                             )
                             DropdownMenuItem(
-                                text = { Text("Archive") },
+                                text = { Text(stringResource(R.string.read_archive)) },
                                 leadingIcon = { Icon(Icons.Filled.Archive, null) },
                                 onClick = {
                                     menuOpen = false
@@ -183,11 +271,13 @@ fun MessageReadScreen(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        if (MailRules.deleteIsPermanent(folder)) {
-                                            "Delete permanently"
-                                        } else {
-                                            "Move to Trash"
-                                        },
+                                        stringResource(
+                                            if (MailRules.deleteIsPermanent(folder)) {
+                                                R.string.read_delete_permanent
+                                            } else {
+                                                R.string.read_delete
+                                            },
+                                        ),
                                     )
                                 },
                                 leadingIcon = { Icon(Icons.Filled.Delete, null) },
@@ -205,12 +295,12 @@ fun MessageReadScreen(
                                 // a control that did nothing. Say why, and
                                 // offer the refresh that fills it.
                                 DropdownMenuItem(
-                                    text = { Text("Folders have not loaded yet") },
+                                    text = { Text(stringResource(R.string.read_move_loading)) },
                                     enabled = false,
                                     onClick = {},
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Reload folders") },
+                                    text = { Text(stringResource(R.string.read_move_reload)) },
                                     onClick = {
                                         moveOpen = false
                                         viewModel.loadFolders()
@@ -244,7 +334,9 @@ fun MessageReadScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(error!!, color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(14.dp))
-                        Button(onClick = { error = null; loadNonce++ }) { Text("Try again") }
+                        Button(onClick = { error = null; loadNonce++ }) {
+                            Text(stringResource(R.string.try_again))
+                        }
                     }
                 }
             }
@@ -260,16 +352,36 @@ fun MessageReadScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState()),
                 ) {
+                    if (fromCache) {
+                        Surface(
+                            color = SentinelSurfaceTop,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                stringResource(
+                                    R.string.offline_banner_read,
+                                    savedAtLabel(savedAtMs),
+                                ),
+                                color = SentinelAmber,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                            )
+                        }
+                    }
                     Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
                         Text(msg.subject, style = MaterialTheme.typography.titleLarge)
                         Spacer(Modifier.height(10.dp))
-                        HeaderLine("From", msg.from)
-                        HeaderLine("To", msg.to)
-                        if (msg.cc.isNotBlank()) HeaderLine("Cc", msg.cc)
-                        HeaderLine("Date", msg.dateText)
+                        HeaderLine(stringResource(R.string.read_from), msg.from, bold = true)
+                        HeaderLine(stringResource(R.string.read_to), msg.to)
+                        if (msg.cc.isNotBlank()) HeaderLine(stringResource(R.string.read_cc), msg.cc)
+                        HeaderLine(stringResource(R.string.read_date), msg.dateText)
                         if (error != null) {
                             Spacer(Modifier.height(8.dp))
                             Text(error!!, color = MaterialTheme.colorScheme.error)
+                        }
+                        if (note != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(note!!, color = SentinelMuted)
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
@@ -281,15 +393,15 @@ fun MessageReadScreen(
                     ) {
                         OutlinedButton(onClick = { onReply(msg, false) }) {
                             Icon(Icons.Filled.Reply, null, Modifier.padding(end = 6.dp))
-                            Text("Reply")
+                            Text(stringResource(R.string.read_reply))
                         }
                         OutlinedButton(onClick = { onReply(msg, true) }) {
                             Icon(Icons.Filled.ReplyAll, null, Modifier.padding(end = 6.dp))
-                            Text("Reply all")
+                            Text(stringResource(R.string.read_reply_all))
                         }
                         OutlinedButton(onClick = { onForward(msg) }) {
                             Icon(Icons.Filled.Forward, null, Modifier.padding(end = 6.dp))
-                            Text("Forward")
+                            Text(stringResource(R.string.read_forward))
                         }
                     }
                     if (msg.htmlBody != null) {
@@ -300,17 +412,42 @@ fun MessageReadScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             OutlinedButton(onClick = { formatted = !formatted }) {
-                                Text(if (formatted) "View plain text" else "View formatted")
+                                Text(
+                                    stringResource(
+                                        if (formatted) R.string.read_view_plain
+                                        else R.string.read_view_formatted,
+                                    ),
+                                )
                             }
-                            if (formatted) {
-                                OutlinedButton(onClick = { loadImages = !loadImages }) {
-                                    Text(if (loadImages) "Block remote images" else "Load remote images")
+                            if (formatted && !loadImages) {
+                                OutlinedButton(onClick = { loadImages = true }) {
+                                    Text(stringResource(R.string.read_load_images))
                                 }
                             }
                         }
-                        if (formatted && !loadImages) {
+                        if (formatted && !senderAutoLoad && !loadImages) {
+                            Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp)) {
+                                Text(
+                                    stringResource(R.string.read_images_note),
+                                    color = SentinelMuted,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                TextButton(onClick = {
+                                    viewModel.settingsStore.alwaysLoadImageSenders =
+                                        ImagePolicy.remember(
+                                            viewModel.settingsStore.alwaysLoadImageSenders,
+                                            msg.from,
+                                        )
+                                    senderAutoLoad = true
+                                    loadImages = true
+                                }) {
+                                    Text(stringResource(R.string.read_always_load_sender))
+                                }
+                            }
+                        }
+                        if (formatted && loadImages) {
                             Text(
-                                "Remote images are blocked. Nothing in this message can phone home until you load them.",
+                                stringResource(R.string.read_images_loaded),
                                 color = SentinelMuted,
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
@@ -318,7 +455,11 @@ fun MessageReadScreen(
                         }
                     }
                     if (formatted && msg.htmlBody != null) {
-                        FormattedMailView(html = msg.htmlBody, loadImages = loadImages)
+                        FormattedMailView(
+                            html = msg.htmlBody,
+                            inlineParts = inlineParts,
+                            loadImages = loadImages,
+                        )
                     } else {
                         SelectionContainer {
                             Text(
@@ -328,53 +469,96 @@ fun MessageReadScreen(
                             )
                         }
                     }
+                    if (preview != null) {
+                        Image(
+                            bitmap = preview!!,
+                            contentDescription = stringResource(R.string.attachment_preview),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 18.dp, vertical = 8.dp),
+                        )
+                    }
                     if (msg.attachments.isNotEmpty()) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
                         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                             Text(
-                                "Attachments",
+                                stringResource(R.string.read_attachments),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Spacer(Modifier.height(8.dp))
                             msg.attachments.forEach { att ->
-                                OutlinedButton(
-                                    onClick = {
-                                        scope.launch {
-                                            try {
-                                                val bytes = viewModel.downloadAttachment(
-                                                    folder, uid, att.partIndex,
-                                                )
-                                                val dir = File(context.cacheDir, "attachments")
-                                                    .apply { mkdirs() }
-                                                val safeName = att.fileName
-                                                    .replace(Regex("[^A-Za-z0-9._-]"), "_")
-                                                    .ifBlank { "attachment" }
-                                                val file = File(dir, safeName)
-                                                file.writeBytes(bytes)
-                                                val uri = FileProvider.getUriForFile(
-                                                    context,
-                                                    "${context.packageName}.fileprovider",
-                                                    file,
-                                                )
-                                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(
-                                                        uri,
-                                                        att.mimeType.ifBlank { "*/*" },
-                                                    )
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                }
-                                                context.startActivity(
-                                                    Intent.createChooser(intent, "Open attachment"),
-                                                )
-                                            } catch (e: Exception) {
-                                                error = MailViewModel.friendlyError(e)
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Icon(Icons.Filled.AttachFile, null, Modifier.padding(end = 6.dp))
-                                    Text("${att.fileName} (${MailText.formatBytes(att.sizeBytes)})")
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                try {
+                                                    val bytes = viewModel.downloadAttachment(
+                                                        folder, uid, att.partIndex,
+                                                    )
+                                                    if (att.mimeType.startsWith("image/", true)) {
+                                                        // Images preview in place
+                                                        // (1.2.0) — no round trip
+                                                        // through another app to
+                                                        // see what you were sent.
+                                                        val bitmap = BitmapFactory.decodeByteArray(
+                                                            bytes, 0, bytes.size,
+                                                        )
+                                                        if (bitmap != null) {
+                                                            preview = bitmap.asImageBitmap()
+                                                            return@launch
+                                                        }
+                                                    }
+                                                    val dir = File(context.cacheDir, "attachments")
+                                                        .apply { mkdirs() }
+                                                    val safeName = att.fileName
+                                                        .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                                                        .ifBlank { "attachment" }
+                                                    val file = File(dir, safeName)
+                                                    file.writeBytes(bytes)
+                                                    val uri = FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        file,
+                                                    )
+                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(
+                                                            uri,
+                                                            att.mimeType.ifBlank { "*/*" },
+                                                        )
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    }
+                                                    context.startActivity(
+                                                        Intent.createChooser(
+                                                            intent,
+                                                            context.getString(
+                                                                R.string.read_open_attachment,
+                                                            ),
+                                                        ),
+                                                    )
+                                                } catch (e: Exception) {
+                                                    error = MailViewModel.friendlyError(e)
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Icon(Icons.Filled.AttachFile, null, Modifier.padding(end = 6.dp))
+                                        Text("${att.fileName} (${MailText.formatBytes(att.sizeBytes)})")
+                                    }
+                                    IconButton(onClick = {
+                                        pendingSave = att
+                                        saveLauncher.launch(att.fileName)
+                                    }) {
+                                        Icon(
+                                            Icons.Filled.Save,
+                                            contentDescription = stringResource(
+                                                R.string.attachment_save,
+                                            ),
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.height(8.dp))
                             }
@@ -385,10 +569,70 @@ fun MessageReadScreen(
             }
         }
     }
+
+    // ---- snooze dialog (1.2.0) ----
+    if (snoozeOpen && message != null) {
+        val msg = message!!
+        AlertDialog(
+            onDismissRequest = { snoozeOpen = false },
+            title = { Text(stringResource(R.string.snooze_title)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(R.string.snooze_explainer),
+                        color = SentinelMuted,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    val snoozeChoices: List<Pair<SnoozeLogic.Choice, Int>> = listOf(
+                        SnoozeLogic.Choice.LATER_TODAY to R.string.snooze_later_today,
+                        SnoozeLogic.Choice.TOMORROW to R.string.snooze_tomorrow,
+                        SnoozeLogic.Choice.NEXT_WEEK to R.string.snooze_next_week,
+                    )
+                    snoozeChoices.forEach { (choice, label) ->
+                        val returnsAt = remember(choice) {
+                            SnoozeLogic.returnTimeMs(choice, System.currentTimeMillis())
+                        }
+                        val whenText = remember(returnsAt) {
+                            DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+                                .withZone(ZoneId.systemDefault())
+                                .format(java.time.Instant.ofEpochMilli(returnsAt))
+                        }
+                        TextButton(onClick = {
+                            snoozeOpen = false
+                            val summary = MailSummary(
+                                uid = uid,
+                                subject = msg.subject,
+                                from = msg.from,
+                                to = msg.to,
+                                dateText = msg.dateText,
+                                unread = msg.unread,
+                                snippet = "",
+                                starred = msg.starred,
+                                hasAttachments = msg.attachments.isNotEmpty(),
+                                folderName = folder,
+                                messageId = msg.messageId,
+                                references = msg.references,
+                            )
+                            act { viewModel.snooze(folder, summary, choice) }
+                        }) {
+                            Text("${stringResource(label)} — $whenText")
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { snoozeOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun HeaderLine(label: String, value: String) {
+private fun HeaderLine(label: String, value: String, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text(
             label,
@@ -399,7 +643,7 @@ private fun HeaderLine(label: String, value: String) {
         Text(
             value,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (label == "From") FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
 }
@@ -413,9 +657,16 @@ private fun HeaderLine(label: String, value: String) {
  * wrote reaches this view unexamined.
  */
 @Composable
-private fun FormattedMailView(html: String, loadImages: Boolean) {
-    val document = remember(html) {
-        val body = HtmlSanitizer.sanitize(html)
+private fun FormattedMailView(
+    html: String,
+    inlineParts: Map<String, InlineImages.Part>,
+    loadImages: Boolean,
+) {
+    val document = remember(html, inlineParts) {
+        // The message's own inline images are inlined FIRST (as
+        // data: URIs), then the result passes the sanitizer —
+        // the cage gets the last word, as always.
+        val body = HtmlSanitizer.sanitize(InlineImages.inlineIntoHtml(html, inlineParts))
         """
         <!doctype html><html><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

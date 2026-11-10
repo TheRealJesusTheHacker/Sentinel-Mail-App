@@ -24,7 +24,11 @@ data class ListedFolder(
 
 /** One row of a message list. Extended over the Command App's
  * summary with the star, the attachment marker, and a real snippet
- * (the dedicated app fetches a bounded text peek per list page). */
+ * (the dedicated app fetches a bounded text peek per list page).
+ * 1.2.0 adds the threading headers (Message-ID / In-Reply-To /
+ * References, fetched with the envelope) that [Threading] groups
+ * by, and [folderName], which is how an all-folders search result
+ * says where it lives. */
 data class MailSummary(
     val uid: Long,
     val subject: String,
@@ -35,6 +39,19 @@ data class MailSummary(
     val snippet: String,
     val starred: Boolean = false,
     val hasAttachments: Boolean = false,
+    val folderName: String = "",
+    val messageId: String? = null,
+    val inReplyTo: String? = null,
+    val references: String? = null,
+)
+
+/** The server's own storage answer (GETQUOTAROOT), in kilobytes
+ * as RFC 2087 speaks them. Present only when the server actually
+ * answered — the app shows no quota surface at all otherwise,
+ * because an invented number is worse than none. */
+data class MailQuota(
+    val usedKb: Long,
+    val limitKb: Long,
 )
 
 /** A downloadable/viewable attachment part of a message. */

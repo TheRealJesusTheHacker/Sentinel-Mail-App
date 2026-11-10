@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sentinel Mail — cadenas de la interfaz en español (1.2.0).
+  Las mismas claves que values/strings.xml; Android elige según
+  el idioma del dispositivo. El par ES es parte del estándar de
+  la casa: lo que se publica en inglés se publica en español.
+-->
+<resources>
+    <string name="app_name">Sentinel Mail</string>
+    <string name="notification_channel_new_mail">Correo nuevo</string>
+    <string name="notification_channel_new_mail_desc">Revisa tu buzón según el horario que elijas y anuncia lo que llegó. Revisiones programadas, no notificaciones push.</string>
+
+    <!-- common -->
+    <string name="try_again">Intentar de nuevo</string>
+    <string name="cancel">Cancelar</string>
+    <string name="back">Atrás</string>
+    <string name="close">Cerrar</string>
+    <string name="save">Guardar</string>
+    <string name="delete">Eliminar</string>
+    <string name="rename">Renombrar</string>
+    <string name="create">Crear</string>
+    <string name="undo">Deshacer</string>
+    <string name="settings">Ajustes</string>
+    <string name="more_actions">Más acciones</string>
+    <string name="loading">Cargando…</string>
+
+    <!-- offline / cache -->
+    <string name="offline_saved_folders">No se pudo contactar el servidor de correo — se muestran tus carpetas guardadas.</string>
+    <string name="offline_banner_list">Estás sin conexión — se muestra la copia guardada de %1$s. El correo nuevo no puede llegar y no se pueden hacer cambios hasta que vuelvas a tener conexión.</string>
+    <string name="offline_banner_read">Copia guardada de %1$s. Estás sin conexión, así que este mensaje no se ha marcado como leído en el servidor.</string>
+    <string name="saved_time_today">hoy a las %1$s</string>
+    <string name="saved_time_date">%1$s a las %2$s</string>
+
+    <!-- notifications permission explainer -->
+    <string name="notify_explainer_title">Entérate cuando llegue correo</string>
+    <string name="notify_explainer_body">Sentinel Mail revisa tu bandeja según el horario que fijes en Ajustes y puede anunciar el correo nuevo. Android necesita tu permiso para mostrar esos anuncios. No se envía nada a ningún sitio — la revisión va de este teléfono a tu servidor de correo.</string>
+    <string name="notify_explainer_allow">Permitir notificaciones</string>
+    <string name="notify_explainer_not_now">Ahora no</string>
+
+    <!-- folder list -->
+    <string name="folders_shared_section">CARPETAS COMPARTIDAS</string>
+    <string name="folders_empty_title">Aún no hay carpetas</string>
+    <string name="folders_empty_body">El servidor respondió pero no enumeró ninguna carpeta. Desliza para actualizar, o revisa la cuenta en el correo web.</string>
+    <string name="folders_error_title">Las carpetas no se pudieron cargar</string>
+    <string name="compose_new_message">Mensaje nuevo</string>
+    <string name="unread_count">%1$d sin leer</string>
+    <string name="folder_new">Carpeta nueva</string>
+    <string name="folder_new_title">Carpeta nueva</string>
+    <string name="folder_new_hint">Nombre de la carpeta</string>
+    <string name="folder_new_explainer">Se crea en tu propio buzón en el servidor, así que el correo web también la ve. Usa un punto para anidar, como Recibos.2026.</string>
+    <string name="folder_rename_title">Renombrar carpeta</string>
+    <string name="folder_rename_hint">Nombre nuevo</string>
+    <string name="folder_rename_explainer">Solo cambia la última parte del nombre; todo lo archivado en ella se mueve con ella.</string>
+    <string name="folder_delete_title">¿Eliminar “%1$s”?</string>
+    <string name="folder_delete_body_unknown">La carpeta y todo su contenido se eliminarán del servidor. Esto no se puede deshacer desde la app.</string>
+    <string name="folder_options">Opciones de la carpeta %1$s</string>
+    <string name="folder_created">Carpeta creada</string>
+    <string name="folder_renamed">Carpeta renombrada</string>
+    <string name="folder_deleted">Carpeta eliminada</string>
+    <string name="snoozed_returned">%1$d mensaje(s) pospuesto(s) de vuelta</string>
+
+    <!-- message list -->
+    <string name="search_hint_this_folder">Buscar en esta carpeta</string>
+    <string name="search_hint_all_folders">Buscar en todas las carpetas</string>
+    <string name="search_scope_all">Buscando en cada carpeta — asunto, remitente y cuerpo. Cada resultado dice en qué carpeta está.</string>
+    <string name="search_scope_some_failed">Se buscó en %1$d de %2$d carpetas — el servidor rechazó %3$s.</string>
+    <string name="search_results_capped">Se muestran los primeros %1$d resultados.</string>
+    <string name="search_none">Sin coincidencias</string>
+    <string name="search_none_body">Nada en las carpetas buscadas coincide con “%1$s”.</string>
+    <string name="recent_searches">Búsquedas recientes</string>
+    <string name="clear_search">Borrar búsqueda</string>
+    <string name="messages_empty_title">Nada por aquí</string>
+    <string name="messages_empty_body">Esta carpeta está vacía.</string>
+    <string name="messages_error_title">Los mensajes no se pudieron cargar</string>
+    <string name="thread_count">%1$d mensajes</string>
+    <string name="thread_expand">Mostrar toda la conversación</string>
+    <string name="thread_collapse">Ocultar la conversación</string>
+    <string name="star">Destacar</string>
+    <string name="unstar">Quitar destacado</string>
+    <string name="has_attachment">Tiene un adjunto</string>
+    <string name="archived_snackbar">Archivado</string>
+    <string name="deleted_snackbar">Movido a la Papelera</string>
+    <string name="message_moved_snackbar">Movido</string>
+
+    <!-- read -->
+    <string name="read_view_formatted">Ver con formato</string>
+    <string name="read_view_plain">Ver texto plano</string>
+    <string name="read_images_blocked">Las imágenes remotas están desactivadas — pueden avisar al remitente de que abriste esto. Las imágenes incluidas en el propio mensaje sí se muestran en la vista con formato.</string>
+    <string name="read_load_images">Cargar imágenes remotas</string>
+    <string name="read_always_load_sender">Cargar siempre de este remitente</string>
+    <string name="read_images_loaded">Las imágenes remotas están activadas para este mensaje.</string>
+    <string name="read_attachments">Adjuntos</string>
+    <string name="attachment_save">Guardar</string>
+    <string name="attachment_saved">Guardado</string>
+    <string name="attachment_save_failed">Ese adjunto no se pudo guardar.</string>
+    <string name="attachment_open_failed">Ninguna app de este teléfono puede abrir ese archivo.</string>
+    <string name="read_mark_unread">Marcar como no leído</string>
+    <string name="read_mark_read">Marcar como leído</string>
+    <string name="read_move_to">Mover a la carpeta</string>
+    <string name="read_archive">Archivar</string>
+    <string name="read_delete">Mover a la Papelera</string>
+    <string name="read_delete_permanent">Eliminar para siempre</string>
+    <string name="read_reply">Responder</string>
+    <string name="read_reply_all">Responder a todos</string>
+    <string name="read_forward">Reenviar</string>
+    <string name="snooze">Posponer</string>
+    <string name="snooze_title">Posponer hasta</string>
+    <string name="snooze_later_today">Más tarde hoy</string>
+    <string name="snooze_tomorrow">Mañana</string>
+    <string name="snooze_next_week">La próxima semana</string>
+    <string name="snooze_explainer">El mensaje se mueve a la carpeta Pospuestos y vuelve más o menos a la hora que elijas — los regresos van con las revisiones regulares de la app, así que lee la hora como “más o menos entonces”, no al minuto.</string>
+    <string name="snoozed_snackbar">Pospuesto — vuelve %1$s</string>
+    <string name="snooze_failed">Ese mensaje no se pudo posponer.</string>
+    <string name="to_label">Para: %1$s</string>
+    <string name="cc_label">Cc: %1$s</string>
+
+    <!-- compose -->
+    <string name="compose_to">Para</string>
+    <string name="compose_cc">Cc</string>
+    <string name="compose_bcc">Cco</string>
+    <string name="compose_add_cc">Añadir Cc</string>
+    <string name="compose_add_bcc">Añadir Cco</string>
+    <string name="compose_subject">Asunto</string>
+    <string name="compose_body">Mensaje</string>
+    <string name="compose_send">Enviar</string>
+    <string name="compose_attach">Adjuntar archivo</string>
+    <string name="compose_attach_camera">Tomar foto</string>
+    <string name="compose_save_draft">Guardar borrador</string>
+    <string name="compose_discard">Descartar</string>
+    <string name="compose_discard_title">¿Descartar este borrador?</string>
+    <string name="compose_discard_body">El mensaje no se ha guardado. Descartarlo lo pierde para siempre.</string>
+    <string name="compose_keep_editing">Seguir editando</string>
+    <string name="compose_draft_saved">Borrador guardado</string>
+    <string name="compose_sent">Enviado</string>
+    <string name="compose_undo_window">Enviando en %1$d…</string>
+    <string name="compose_error_recipient">Añade al menos un destinatario que el servidor acepte.</string>
+    <string name="compose_sending">Enviando…</string>
+
+    <!-- settings -->
+    <string name="settings_account">Cuenta</string>
+    <string name="settings_server_line">Sentinel Mail · mail.sentinelsafeguard.net — revisado por una conexión cifrada, con certificado fijado.</string>
+    <string name="settings_notifications">Notificaciones</string>
+    <string name="settings_notifications_on">Activadas</string>
+    <string name="settings_notifications_off">Desactivadas</string>
+    <string name="settings_notifications_explainer">Anunciar el correo nuevo cuando una revisión programada lo encuentre.</string>
+    <string name="settings_permission_missing">Android no ha concedido el permiso de notificaciones, así que los anuncios no pueden mostrarse aunque esto esté activado.</string>
+    <string name="settings_permission_grant">Conceder permiso</string>
+    <string name="settings_checks">Revisiones de correo nuevo</string>
+    <string name="settings_checks_manual">Solo manual</string>
+    <string name="settings_checks_minutes">Cada %1$d minutos</string>
+    <string name="settings_undo_send">Deshacer envío</string>
+    <string name="settings_undo_off">Desactivado — enviar enseguida</string>
+    <string name="settings_undo_seconds">Esperar %1$d segundos</string>
+    <string name="settings_undo_explainer">Con una espera fijada, Enviar inicia una cuenta atrás. Deshaz dentro de ella y nada se envió jamás — sin trucos de recuperación, el mensaje simplemente no sale.</string>
+    <string name="settings_signatures">Firmas</string>
+    <string name="settings_signature_personal">Tu firma (skyler@)</string>
+    <string name="settings_signature_shared">Firma compartida (sentinel@)</string>
+    <string name="settings_signature_hint">Texto plano, añadido al final de los mensajes de esa dirección.</string>
+    <string name="settings_signature_saved">Firma guardada</string>
+    <string name="settings_cache">Caché sin conexión</string>
+    <string name="settings_cache_size">El correo guardado ocupa %1$s en este teléfono, cifrado.</string>
+    <string name="settings_cache_clear">Borrar caché</string>
+    <string name="settings_cache_cleared">Caché borrada</string>
+    <string name="settings_cache_explainer">Las carpetas, las listas de mensajes y los mensajes que abres se guardan en el teléfono para que el buzón funcione sin conexión. Los adjuntos nunca se guardan.</string>
+    <string name="settings_storage">Almacenamiento del buzón</string>
+    <string name="settings_storage_line">%1$s de %2$s en uso en el servidor</string>
+    <string name="settings_storage_unlimited">%1$s en uso en el servidor (sin límite reportado)</string>
+    <string name="settings_lock">Bloqueo de la app</string>
+    <string name="settings_lock_on">Activado — desbloquea con biometría, credencial del dispositivo o PIN</string>
+    <string name="settings_lock_off">Desactivado</string>
+    <string name="settings_pin_set">Fijar PIN</string>
+    <string name="settings_pin_change">Cambiar PIN</string>
+    <string name="settings_pin_remove">Quitar PIN</string>
+    <string name="settings_sign_out">Cerrar sesión</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_about_tagline">Sentinel Mail — tu correo, en tu servidor, en tu mano.</string>
+    <string name="settings_about_version">Versión %1$s (%2$d)</string>
+    <string name="settings_about_server">Servidor: mail.sentinelsafeguard.net (Sentinel Mail, alojado por ti)</string>
+
+    <!-- sign in -->
+    <string name="signin_title">Sentinel Mail</string>
+    <string name="signin_subtitle">Tu buzón, directo desde el servidor de Sentinel — sin intermediarios.</string>
+    <string name="signin_address">Dirección de correo</string>
+    <string name="signin_password">Contraseña</string>
+    <string name="signin_button">Iniciar sesión</string>
+    <string name="signin_advanced">Ajustes avanzados del servidor</string>
+    <string name="signin_host">Servidor</string>
+    <string name="signin_imap_port">Puerto IMAP</string>
+    <string name="signin_smtp_port">Puerto SMTP</string>
+    <string name="signin_failed">El inicio de sesión falló</string>
+
+    <!-- lock -->
+    <string name="lock_title">Sentinel Mail está bloqueado</string>
+    <string name="lock_subtitle">Desbloquea para leer tu correo.</string>
+    <string name="lock_unlock">Desbloquear</string>
+    <string name="lock_pin_hint">PIN de la app</string>
+    <string name="lock_pin_wrong">Ese PIN no es correcto.</string>
+    <string name="lock_biometric">Usar biometría o el desbloqueo del dispositivo</string>
+    <string name="lock_unlock_biometrics">Desbloquear con biometría</string>
+    <string name="lock_unlock_pin">Desbloquear con PIN</string>
+    <string name="lock_body">Tu correo permanece en el servidor y tu contraseña permanece en el almacenamiento seguro de este teléfono.</string>
+    <string name="lock_biometric_unavailable">La biometría no está disponible en este dispositivo ahora mismo. Usa tu PIN.</string>
+    <string name="lock_pin_mismatch">Ese PIN no coincide.</string>
+    <string name="lock_use_pin">Usar PIN</string>
+
+    <!-- settings prose -->
+    <string name="settings_account_line">Conectado directamente a mail.sentinelsafeguard.net (IMAP 993, envío 587). Tu contraseña vive solo en el almacenamiento seguro de este teléfono.</string>
+    <string name="settings_checks_explainer">Sentinel Mail revisa el servidor con un temporizador y te avisa cuando llega correo nuevo. Es una revisión periódica — el correo no se envía al teléfono al instante.</string>
+    <string name="settings_checks_hour">Cada hora</string>
+    <string name="settings_checks_manual_long">Solo manual — revisar al abrir una carpeta</string>
+    <string name="settings_lock_line">Bloquear Sentinel Mail</string>
+    <string name="settings_lock_explainer">Pedir biometría, el desbloqueo del dispositivo o tu PIN de la app cuando la app vuelva tras unos cinco minutos fuera.</string>
+    <string name="settings_pin_dialog_title">PIN de la app</string>
+    <string name="settings_pin_explainer">Al menos 4 dígitos. El PIN nunca se guarda — solo una comprobación codificada de él.</string>
+    <string name="settings_pin_new">PIN nuevo</string>
+    <string name="settings_pin_repeat">Repetir PIN</string>
+    <string name="settings_pin_save">Guardar PIN</string>
+    <string name="settings_pin_short">Usa al menos 4 dígitos.</string>
+    <string name="settings_pin_mismatch">Las dos entradas no coinciden.</string>
+    <string name="settings_pin_set_note">PIN fijado. Solo se guarda un verificador codificado — nunca el PIN en sí.</string>
+    <string name="settings_pin_removed_note">PIN eliminado.</string>
+    <string name="settings_pin_removed_lock_note">PIN eliminado y bloqueo de la app desactivado — fija un PIN nuevo para volver a activar el bloqueo.</string>
+    <string name="settings_signout_explainer">Cerrar sesión elimina tu contraseña y tus ajustes de este teléfono y detiene las revisiones periódicas. Tu correo en sí permanece en el servidor, intacto.</string>
+    <string name="settings_signout_title">¿Cerrar sesión de Sentinel Mail?</string>
+    <string name="settings_signout_body">Tu contraseña y tus ajustes se eliminan de este teléfono. Tu correo permanece en el servidor.</string>
+    <string name="settings_signout_stay">Seguir con la sesión iniciada</string>
+    <string name="settings_about_line">Sentinel Safeguard LLC — tu correo, desde tu propio servidor, sin nadie en medio.</string>
+
+    <!-- sign-in prose -->
+    <string name="signin_subtitle_long">Tu correo, directo desde tu propio servidor. Esta app habla directamente con Sentinel Mail — sin intermediarios, sin copias en ningún otro sitio.</string>
+    <string name="signin_advanced_hide">Ocultar ajustes avanzados del servidor</string>
+    <string name="signin_advanced_explainer">Prefijado para Sentinel Mail. Cambia esto solo para otro buzón en un servidor distinto.</string>
+    <string name="signin_host_label">Servidor (predeterminado mail.sentinelsafeguard.net)</string>
+    <string name="signin_imap_label">Puerto IMAP (predeterminado 993, TLS)</string>
+    <string name="signin_smtp_label">Puerto de envío SMTP (predeterminado 587)</string>
+    <string name="signin_privacy_line">Tu contraseña se guarda solo en el almacenamiento seguro de este teléfono y solo se envía al servidor de correo, por una conexión cifrada.</string>
+    <string name="logo_description">Sentinel Safeguard</string>
+
+    <!-- compose prose -->
+    <string name="compose_title_new">Mensaje nuevo</string>
+    <string name="compose_title_reply">Responder</string>
+    <string name="compose_title_forward">Reenviar</string>
+    <string name="compose_title_draft">Borrador</string>
+    <string name="compose_sending_as">Enviando como %1$s</string>
+    <string name="compose_add_cc_bcc">Añadir Cc / Cco</string>
+    <string name="compose_saving">Guardando…</string>
+    <string name="compose_draft_saved_long">Borrador guardado en tu carpeta de Borradores</string>
+    <string name="compose_discard_title_long">¿Descartar este mensaje?</string>
+    <string name="compose_discard_body_draft">Este borrador se eliminará de tu carpeta de Borradores.</string>
+    <string name="compose_discard_body_new">No se guardará nada. Usa Guardar borrador primero si quieres conservarlo.</string>
+    <string name="compose_keep_writing">Seguir escribiendo</string>
+    <string name="compose_back_discard">Descartar y volver</string>
+    <string name="compose_attach_cap">Los adjuntos tienen un tope de 25 MB en total — el límite del propio servidor. Ese archivo haría que este mensaje lo superara.</string>
+    <string name="compose_attach_read_error">Ese archivo no se pudo leer: %1$s</string>
+    <string name="compose_error_no_recipient">Añade al menos un destinatario.</string>
+    <string name="compose_error_bad_address">“%1$s” no parece una dirección de correo completa.</string>
+    <string name="compose_attach_file">Adjuntar un archivo</string>
+    <string name="compose_remove_attachment">Quitar %1$s</string>
+    <string name="compose_photo_name">Foto %1$s.jpg</string>
+
+    <!-- read prose -->
+    <string name="read_back_list">Volver a la lista</string>
+    <string name="read_from">De</string>
+    <string name="read_to">Para</string>
+    <string name="read_cc">Cc</string>
+    <string name="read_date">Fecha</string>
+    <string name="read_block_images">Bloquear imágenes remotas</string>
+    <string name="read_images_note">Las imágenes remotas están bloqueadas. Nada en este mensaje puede llamar a casa hasta que las cargues.</string>
+    <string name="read_move_loading">Las carpetas aún no se han cargado</string>
+    <string name="read_move_reload">Recargar carpetas</string>
+    <string name="read_open_attachment">Abrir adjunto</string>
+    <string name="attachment_label">Adjunto</string>
+    <string name="attachment_preview">Vista previa</string>
+
+    <!-- list prose -->
+    <string name="list_back_folders">Volver a las carpetas</string>
+    <string name="list_search_folder">Buscar en esta carpeta</string>
+    <string name="list_search_run">Ejecutar búsqueda</string>
+    <string name="list_search_label">Buscar asunto, remitente o texto</string>
+    <string name="list_none_search">Nada en esta carpeta coincide con esa búsqueda.</string>
+    <string name="list_none_yet">Nada por aquí todavía.</string>
+    <string name="folder_options_short">Opciones de la carpeta</string>
+    <string name="snooze_back_at">vuelve %1$s</string>
+    <string name="notif_new_one">1 mensaje nuevo</string>
+    <string name="notif_new_many">%1$d mensajes nuevos</string>
+    <string name="notif_in_inbox">En tu bandeja de entrada</string>
+    <string name="notif_from">De %1$s</string>
+    <string name="notif_from_others">De %1$s y otros</string>
+    <string name="notif_fallback_title">Correo nuevo</string>
+    <string name="notif_no_subject">(sin asunto)</string>
+</resources>

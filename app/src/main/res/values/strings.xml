@@ -1,6 +1,292 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sentinel Mail — UI strings (1.2.0 externalization).
+  EN here, ES in values-es/strings.xml; the device language
+  chooses. Engine error strings and folder canonical names
+  (MailRules.displayName — proper names, pinned by tests) stay
+  as they are; everything a screen renders as prose lives here.
+-->
 <resources>
     <string name="app_name">Sentinel Mail</string>
     <string name="notification_channel_new_mail">New mail</string>
-    <string name="notification_channel_new_mail_desc">Checks your mailbox on a schedule you choose and tells you about new mail. Checking is periodic — this is not push.</string>
+    <string name="notification_channel_new_mail_desc">Checks your mailbox on a schedule you choose and announces what arrived. Scheduled checks, not push.</string>
+
+    <!-- common -->
+    <string name="try_again">Try again</string>
+    <string name="cancel">Cancel</string>
+    <string name="back">Back</string>
+    <string name="close">Close</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="rename">Rename</string>
+    <string name="create">Create</string>
+    <string name="undo">Undo</string>
+    <string name="settings">Settings</string>
+    <string name="more_actions">More actions</string>
+    <string name="loading">Loading…</string>
+
+    <!-- offline / cache -->
+    <string name="offline_saved_folders">Couldn\'t reach the mail server — showing your saved folders.</string>
+    <string name="offline_banner_list">You\'re offline — showing the saved copy from %1$s. New mail can\'t arrive and changes can\'t be made until you\'re back.</string>
+    <string name="offline_banner_read">Saved copy from %1$s. You\'re offline, so this message hasn\'t been marked read on the server.</string>
+    <string name="saved_time_today">today at %1$s</string>
+    <string name="saved_time_date">%1$s at %2$s</string>
+
+    <!-- notifications permission explainer -->
+    <string name="notify_explainer_title">Know when mail arrives</string>
+    <string name="notify_explainer_body">Sentinel Mail checks your inbox on the schedule you set in Settings and can announce new mail. Android needs your permission to show those announcements. Nothing is sent anywhere — the check runs from this phone to your mail server.</string>
+    <string name="notify_explainer_allow">Allow notifications</string>
+    <string name="notify_explainer_not_now">Not now</string>
+
+    <!-- folder list -->
+    <string name="folders_shared_section">SHARED FOLDERS</string>
+    <string name="folders_empty_title">No folders yet</string>
+    <string name="folders_empty_body">The server answered but listed no folders. Pull to refresh, or check the account in webmail.</string>
+    <string name="folders_error_title">Folders couldn\'t load</string>
+    <string name="compose_new_message">New message</string>
+    <string name="unread_count">%1$d unread</string>
+    <string name="folder_new">New folder</string>
+    <string name="folder_new_title">New folder</string>
+    <string name="folder_new_hint">Folder name</string>
+    <string name="folder_new_explainer">Created in your own mailbox on the server, so webmail sees it too. Use a dot for nesting, like Receipts.2026.</string>
+    <string name="folder_rename_title">Rename folder</string>
+    <string name="folder_rename_hint">New name</string>
+    <string name="folder_rename_explainer">Only the last part of the name changes; everything filed under it moves with it.</string>
+    <string name="folder_delete_title">Delete “%1$s”?</string>
+    <string name="folder_delete_body_unknown">The folder and everything in it will be deleted from the server. This can\'t be undone from the app.</string>
+    <string name="folder_options">Folder options for %1$s</string>
+    <string name="folder_created">Folder created</string>
+    <string name="folder_renamed">Folder renamed</string>
+    <string name="folder_deleted">Folder deleted</string>
+    <string name="snoozed_returned">%1$d snoozed message(s) returned</string>
+
+    <!-- message list -->
+    <string name="search_hint_this_folder">Search this folder</string>
+    <string name="search_hint_all_folders">Search all folders</string>
+    <string name="search_scope_all">Searching every folder — subject, sender, and body. Results say which folder each lives in.</string>
+    <string name="search_scope_some_failed">Searched %1$d of %2$d folders — the server refused %3$s.</string>
+    <string name="search_results_capped">Showing the first %1$d results.</string>
+    <string name="search_none">No matches</string>
+    <string name="search_none_body">Nothing in the searched folders matches “%1$s”.</string>
+    <string name="recent_searches">Recent searches</string>
+    <string name="clear_search">Clear search</string>
+    <string name="messages_empty_title">Nothing here</string>
+    <string name="messages_empty_body">This folder is empty.</string>
+    <string name="messages_error_title">Messages couldn\'t load</string>
+    <string name="thread_count">%1$d messages</string>
+    <string name="thread_expand">Show the whole conversation</string>
+    <string name="thread_collapse">Hide the conversation</string>
+    <string name="star">Star</string>
+    <string name="unstar">Remove star</string>
+    <string name="has_attachment">Has attachment</string>
+    <string name="archived_snackbar">Archived</string>
+    <string name="deleted_snackbar">Moved to Trash</string>
+    <string name="message_moved_snackbar">Moved</string>
+
+    <!-- read -->
+    <string name="read_view_formatted">View formatted</string>
+    <string name="read_view_plain">View plain text</string>
+    <string name="read_images_blocked">Remote images are off — they can tell the sender you opened this. Images included with the message itself still show in the formatted view.</string>
+    <string name="read_load_images">Load remote images</string>
+    <string name="read_always_load_sender">Always load from this sender</string>
+    <string name="read_images_loaded">Remote images are on for this message.</string>
+    <string name="read_attachments">Attachments</string>
+    <string name="attachment_save">Save</string>
+    <string name="attachment_saved">Saved</string>
+    <string name="attachment_save_failed">That attachment couldn\'t be saved.</string>
+    <string name="attachment_open_failed">No app on this phone can open that file.</string>
+    <string name="read_mark_unread">Mark as unread</string>
+    <string name="read_mark_read">Mark as read</string>
+    <string name="read_move_to">Move to folder</string>
+    <string name="read_archive">Archive</string>
+    <string name="read_delete">Move to Trash</string>
+    <string name="read_delete_permanent">Delete permanently</string>
+    <string name="read_reply">Reply</string>
+    <string name="read_reply_all">Reply all</string>
+    <string name="read_forward">Forward</string>
+    <string name="snooze">Snooze</string>
+    <string name="snooze_title">Snooze until</string>
+    <string name="snooze_later_today">Later today</string>
+    <string name="snooze_tomorrow">Tomorrow</string>
+    <string name="snooze_next_week">Next week</string>
+    <string name="snooze_explainer">The message moves to the Snoozed folder and comes back around the time you pick — returns ride the app\'s regular mail checks, so read the time as “around then”, not to the minute.</string>
+    <string name="snoozed_snackbar">Snoozed — back %1$s</string>
+    <string name="snooze_failed">That message couldn\'t be snoozed.</string>
+    <string name="to_label">To: %1$s</string>
+    <string name="cc_label">Cc: %1$s</string>
+
+    <!-- compose -->
+    <string name="compose_to">To</string>
+    <string name="compose_cc">Cc</string>
+    <string name="compose_bcc">Bcc</string>
+    <string name="compose_add_cc">Add Cc</string>
+    <string name="compose_add_bcc">Add Bcc</string>
+    <string name="compose_subject">Subject</string>
+    <string name="compose_body">Message</string>
+    <string name="compose_send">Send</string>
+    <string name="compose_attach">Attach file</string>
+    <string name="compose_attach_camera">Take photo</string>
+    <string name="compose_save_draft">Save draft</string>
+    <string name="compose_discard">Discard</string>
+    <string name="compose_discard_title">Discard this draft?</string>
+    <string name="compose_discard_body">The message hasn\'t been saved. Discarding loses it for good.</string>
+    <string name="compose_keep_editing">Keep editing</string>
+    <string name="compose_draft_saved">Draft saved</string>
+    <string name="compose_sent">Sent</string>
+    <string name="compose_undo_window">Sending in %1$d…</string>
+    <string name="compose_error_recipient">Add at least one recipient the server will accept.</string>
+    <string name="compose_sending">Sending…</string>
+
+    <!-- settings -->
+    <string name="settings_account">Account</string>
+    <string name="settings_server_line">Sentinel Mail · mail.sentinelsafeguard.net — checked over an encrypted connection, certificate-pinned.</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_on">On</string>
+    <string name="settings_notifications_off">Off</string>
+    <string name="settings_notifications_explainer">Announce new mail when a scheduled check finds it.</string>
+    <string name="settings_permission_missing">Android has not granted notification permission, so announcements can\'t show even with this on.</string>
+    <string name="settings_permission_grant">Grant permission</string>
+    <string name="settings_checks">New-mail checks</string>
+    <string name="settings_checks_manual">Manual only</string>
+    <string name="settings_checks_minutes">Every %1$d minutes</string>
+    <string name="settings_undo_send">Undo send</string>
+    <string name="settings_undo_off">Off — send right away</string>
+    <string name="settings_undo_seconds">Wait %1$d seconds</string>
+    <string name="settings_undo_explainer">With a wait set, Send starts a countdown. Undo inside it and nothing was ever sent — no recall tricks, the message simply never leaves.</string>
+    <string name="settings_signatures">Signatures</string>
+    <string name="settings_signature_personal">Your signature (skyler@)</string>
+    <string name="settings_signature_shared">Shared signature (sentinel@)</string>
+    <string name="settings_signature_hint">Plain text, added at the end of messages from that address.</string>
+    <string name="settings_signature_saved">Signature saved</string>
+    <string name="settings_cache">Offline cache</string>
+    <string name="settings_cache_size">Saved mail takes %1$s on this phone, encrypted.</string>
+    <string name="settings_cache_clear">Clear cache</string>
+    <string name="settings_cache_cleared">Cache cleared</string>
+    <string name="settings_cache_explainer">Folders, message lists, and messages you open are kept on the phone so the mailbox works offline. Attachments are never kept.</string>
+    <string name="settings_storage">Mailbox storage</string>
+    <string name="settings_storage_line">%1$s of %2$s used on the server</string>
+    <string name="settings_storage_unlimited">%1$s used on the server (no limit reported)</string>
+    <string name="settings_lock">App lock</string>
+    <string name="settings_lock_on">On — unlock with biometrics, device credential, or PIN</string>
+    <string name="settings_lock_off">Off</string>
+    <string name="settings_pin_set">Set PIN</string>
+    <string name="settings_pin_change">Change PIN</string>
+    <string name="settings_pin_remove">Remove PIN</string>
+    <string name="settings_sign_out">Sign out</string>
+    <string name="settings_about">About</string>
+    <string name="settings_about_tagline">Sentinel Mail — your mail, on your server, in your hand.</string>
+    <string name="settings_about_version">Version %1$s (%2$d)</string>
+    <string name="settings_about_server">Server: mail.sentinelsafeguard.net (Sentinel Mail, self-hosted)</string>
+
+    <!-- sign in -->
+    <string name="signin_title">Sentinel Mail</string>
+    <string name="signin_subtitle">Your mailbox, straight from the Sentinel server — no middleman.</string>
+    <string name="signin_address">Email address</string>
+    <string name="signin_password">Password</string>
+    <string name="signin_button">Sign in</string>
+    <string name="signin_advanced">Advanced server settings</string>
+    <string name="signin_host">Server host</string>
+    <string name="signin_imap_port">IMAP port</string>
+    <string name="signin_smtp_port">SMTP port</string>
+    <string name="signin_failed">Sign-in failed</string>
+
+    <!-- lock -->
+    <string name="lock_title">Sentinel Mail is locked</string>
+    <string name="lock_subtitle">Unlock to read your mail.</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_pin_hint">App PIN</string>
+    <string name="lock_pin_wrong">That PIN isn\'t right.</string>
+    <string name="lock_biometric">Use biometrics or device unlock</string>
+    <string name="lock_unlock_biometrics">Unlock with biometrics</string>
+    <string name="lock_unlock_pin">Unlock with PIN</string>
+    <string name="lock_body">Your mail stays on the server and your password stays in this phone\'s secure storage.</string>
+    <string name="lock_biometric_unavailable">Biometrics aren\'t available on this device right now. Use your PIN.</string>
+    <string name="lock_pin_mismatch">That PIN doesn\'t match.</string>
+    <string name="lock_use_pin">Use PIN</string>
+
+    <!-- settings prose -->
+    <string name="settings_account_line">Connected directly to mail.sentinelsafeguard.net (IMAP 993, submission 587). Your password lives only in this phone\'s secure storage.</string>
+    <string name="settings_checks_explainer">Sentinel Mail checks the server on a timer and lets you know when new mail arrives. It is periodic checking — mail is not pushed to the phone.</string>
+    <string name="settings_checks_hour">Every hour</string>
+    <string name="settings_checks_manual_long">Manual only — check when you open a folder</string>
+    <string name="settings_lock_line">Lock Sentinel Mail</string>
+    <string name="settings_lock_explainer">Ask for biometrics, your device unlock, or your app PIN when the app comes back after about five minutes away.</string>
+    <string name="settings_pin_dialog_title">App PIN</string>
+    <string name="settings_pin_explainer">At least 4 digits. The PIN is never stored — only a scrambled check of it.</string>
+    <string name="settings_pin_new">New PIN</string>
+    <string name="settings_pin_repeat">Repeat PIN</string>
+    <string name="settings_pin_save">Save PIN</string>
+    <string name="settings_pin_short">Use at least 4 digits.</string>
+    <string name="settings_pin_mismatch">The two entries don\'t match.</string>
+    <string name="settings_pin_set_note">PIN set. Only a scrambled verifier is stored — never the PIN itself.</string>
+    <string name="settings_pin_removed_note">PIN removed.</string>
+    <string name="settings_pin_removed_lock_note">PIN removed and the app lock turned off — set a new PIN to turn the lock back on.</string>
+    <string name="settings_signout_explainer">Sign-out removes your password and settings from this phone and stops the periodic checks. Your mail itself stays on the server, untouched.</string>
+    <string name="settings_signout_title">Sign out of Sentinel Mail?</string>
+    <string name="settings_signout_body">Your password and settings are removed from this phone. Your mail stays on the server.</string>
+    <string name="settings_signout_stay">Stay signed in</string>
+    <string name="settings_about_line">Sentinel Safeguard LLC — your mail, from your own server, with no one in between.</string>
+
+    <!-- sign-in prose -->
+    <string name="signin_subtitle_long">Your mail, straight from your own server. This app talks directly to Sentinel Mail — no middleman, no copy anywhere else.</string>
+    <string name="signin_advanced_hide">Hide advanced server settings</string>
+    <string name="signin_advanced_explainer">Pre-set for Sentinel Mail. Change these only for another mailbox on a different server.</string>
+    <string name="signin_host_label">Server (default mail.sentinelsafeguard.net)</string>
+    <string name="signin_imap_label">IMAP port (default 993, TLS)</string>
+    <string name="signin_smtp_label">SMTP submission port (default 587)</string>
+    <string name="signin_privacy_line">Your password is stored only in this phone\'s secure storage and is only ever sent to the mail server, over an encrypted connection.</string>
+    <string name="logo_description">Sentinel Safeguard</string>
+
+    <!-- compose prose -->
+    <string name="compose_title_new">New message</string>
+    <string name="compose_title_reply">Reply</string>
+    <string name="compose_title_forward">Forward</string>
+    <string name="compose_title_draft">Draft</string>
+    <string name="compose_sending_as">Sending as %1$s</string>
+    <string name="compose_add_cc_bcc">Add Cc / Bcc</string>
+    <string name="compose_saving">Saving…</string>
+    <string name="compose_draft_saved_long">Draft saved to your Drafts folder</string>
+    <string name="compose_discard_title_long">Discard this message?</string>
+    <string name="compose_discard_body_draft">This draft will be deleted from your Drafts folder.</string>
+    <string name="compose_discard_body_new">Nothing will be saved. Use Save draft first if you want to keep it.</string>
+    <string name="compose_keep_writing">Keep writing</string>
+    <string name="compose_back_discard">Discard and go back</string>
+    <string name="compose_attach_cap">Attachments are capped at 25 MB in total — the server\'s own limit. That file would put this message over.</string>
+    <string name="compose_attach_read_error">That file could not be read: %1$s</string>
+    <string name="compose_error_no_recipient">Add at least one recipient.</string>
+    <string name="compose_error_bad_address">“%1$s” doesn\'t look like a complete email address.</string>
+    <string name="compose_attach_file">Attach a file</string>
+    <string name="compose_remove_attachment">Remove %1$s</string>
+    <string name="compose_photo_name">Photo %1$s.jpg</string>
+
+    <!-- read prose -->
+    <string name="read_back_list">Back to the list</string>
+    <string name="read_from">From</string>
+    <string name="read_to">To</string>
+    <string name="read_cc">Cc</string>
+    <string name="read_date">Date</string>
+    <string name="read_block_images">Block remote images</string>
+    <string name="read_images_note">Remote images are blocked. Nothing in this message can phone home until you load them.</string>
+    <string name="read_move_loading">Folders have not loaded yet</string>
+    <string name="read_move_reload">Reload folders</string>
+    <string name="read_open_attachment">Open attachment</string>
+    <string name="attachment_label">Attachment</string>
+    <string name="attachment_preview">Preview</string>
+
+    <!-- list prose -->
+    <string name="list_back_folders">Back to folders</string>
+    <string name="list_search_folder">Search this folder</string>
+    <string name="list_search_run">Run search</string>
+    <string name="list_search_label">Search subject, sender, or text</string>
+    <string name="list_none_search">Nothing in this folder matches that search.</string>
+    <string name="list_none_yet">Nothing here yet.</string>
+    <string name="folder_options_short">Folder options</string>
+    <string name="snooze_back_at">back %1$s</string>
+    <string name="notif_new_one">1 new message</string>
+    <string name="notif_new_many">%1$d new messages</string>
+    <string name="notif_in_inbox">In your inbox</string>
+    <string name="notif_from">From %1$s</string>
+    <string name="notif_from_others">From %1$s and others</string>
+    <string name="notif_fallback_title">New mail</string>
+    <string name="notif_no_subject">(no subject)</string>
 </resources>

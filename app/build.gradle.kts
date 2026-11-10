@@ -65,8 +65,24 @@ android {
         // M-08 send morph with the M-06 drawn tick, haptics,
         // reduced-motion honored throughout), and the premium
         // audit fixes itemized in the program record.
-        versionCode = 2
-        versionName = "1.1.0"
+        // 1.2.0 (2026-11-10): THE PERFECT SWEEP — notification
+        // completion (permission explainer + request, summary
+        // notifications, in-app-seen suppression, the Settings
+        // master switch), reading completion (per-sender image
+        // memory, CID inline images rendered in place, attachment
+        // preview + save-to-file), the encrypted offline cache
+        // (folders/lists/opened messages on disk, browsable
+        // offline, honestly labeled), compose completion
+        // (per-identity signatures, undo-send window, correspondent
+        // autocomplete, camera attach, the reply-to-self fix),
+        // organization (folder create/rename/delete behind rails,
+        // conversation threading, snooze with disclosed-approximate
+        // returns), all-folders search with stated scope + recent
+        // searches, full EN/ES string externalization, quota when
+        // the server answers, and the About block. Itemized in the
+        // program record's 1.2.0 section.
+        versionCode = 3
+        versionName = "1.2.0"
 
         buildConfigField("String", "MAIL_HOST", "\"mail.sentinelsafeguard.net\"")
     }

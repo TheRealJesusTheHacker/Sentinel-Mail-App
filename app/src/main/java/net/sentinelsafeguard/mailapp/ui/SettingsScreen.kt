@@ -1,5 +1,11 @@
 package net.sentinelsafeguard.mailapp.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -21,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -30,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,10 +46,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import net.sentinelsafeguard.mailapp.BuildConfig
+import net.sentinelsafeguard.mailapp.R
+import net.sentinelsafeguard.mailapp.data.mail.MailText
 import net.sentinelsafeguard.mailapp.notify.NewMailWorker
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
@@ -66,14 +80,42 @@ fun SettingsScreen(
     var pinDialog by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    // 1.2.0 additions: notifications, undo-send window,
+    // signatures, the offline cache, and mailbox quota.
+    var notificationsOn by remember { mutableStateOf(settings.notificationsEnabled) }
+    var permissionGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.POST_NOTIFICATIONS,
+                ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        permissionGranted = granted
+        settings.notificationPermissionAsked = true
+    }
+    var undoSeconds by remember { mutableStateOf(settings.undoSendSeconds) }
+    var sigPersonal by remember { mutableStateOf(settings.signaturePersonal) }
+    var sigShared by remember { mutableStateOf(settings.signatureShared) }
+    var cacheBytes by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) {
+        cacheBytes = viewModel.cache.totalSizeBytes()
+        viewModel.loadQuota()
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -90,33 +132,93 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Spacer(Modifier.height(10.dp))
-            Text("Account", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_account), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
                 viewModel.account?.address ?: "",
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
-                "Connected directly to mail.sentinelsafeguard.net (IMAP 993, submission 587). " +
-                    "Your password lives only in this phone's secure storage.",
+                stringResource(R.string.settings_account_line),
                 color = SentinelMuted,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            val quotaNow = viewModel.quota
+            if (quotaNow != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    if (quotaNow.limitKb > 0) {
+                        stringResource(
+                            R.string.settings_storage_line,
+                            MailText.formatBytes(quotaNow.usedKb * 1024),
+                            MailText.formatBytes(quotaNow.limitKb * 1024),
+                        )
+                    } else {
+                        stringResource(
+                            R.string.settings_storage_unlimited,
+                            MailText.formatBytes(quotaNow.usedKb * 1024),
+                        )
+                    },
+                    color = SentinelMuted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             Divider()
-            Text("New mail checks", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_notifications), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(
+                            if (notificationsOn) R.string.settings_notifications_on
+                            else R.string.settings_notifications_off,
+                        ),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        stringResource(R.string.settings_notifications_explainer),
+                        color = SentinelMuted,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Switch(
+                    checked = notificationsOn,
+                    onCheckedChange = { on ->
+                        notificationsOn = on
+                        settings.notificationsEnabled = on
+                    },
+                )
+            }
+            if (notificationsOn && !permissionGranted) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.settings_permission_missing),
+                    color = SentinelMuted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }) { Text(stringResource(R.string.settings_permission_grant)) }
+            }
+            Divider()
+            Text(stringResource(R.string.settings_checks), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Sentinel Mail checks the server on a timer and lets you know when new mail " +
-                    "arrives. It is periodic checking — mail is not pushed to the phone.",
+                stringResource(R.string.settings_checks_explainer),
                 color = SentinelMuted,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(8.dp))
             val options = listOf(
-                15 to "Every 15 minutes",
-                30 to "Every 30 minutes",
-                60 to "Every hour",
-                0 to "Manual only — check when you open a folder",
+                15 to stringResource(R.string.settings_checks_minutes, 15),
+                30 to stringResource(R.string.settings_checks_minutes, 30),
+                60 to stringResource(R.string.settings_checks_hour),
+                0 to stringResource(R.string.settings_checks_manual_long),
             )
             options.forEach { (minutes, label) ->
                 // The whole row selects (1.1.0 — 1.0.0 wired only
@@ -141,17 +243,100 @@ fun SettingsScreen(
                 }
             }
             Divider()
-            Text("App lock", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_undo_send), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(R.string.settings_undo_explainer),
+                color = SentinelMuted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            val undoOptions = listOf(
+                0 to stringResource(R.string.settings_undo_off),
+                5 to stringResource(R.string.settings_undo_seconds, 5),
+                10 to stringResource(R.string.settings_undo_seconds, 10),
+            )
+            undoOptions.forEach { (seconds, label) ->
+                val select = {
+                    undoSeconds = seconds
+                    settings.undoSendSeconds = seconds
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = select),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = undoSeconds == seconds, onClick = select)
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+            Divider()
+            Text(stringResource(R.string.settings_signatures), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = sigPersonal,
+                onValueChange = { sigPersonal = it },
+                label = { Text(stringResource(R.string.settings_signature_personal)) },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = sigShared,
+                onValueChange = { sigShared = it },
+                label = { Text(stringResource(R.string.settings_signature_shared)) },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                stringResource(R.string.settings_signature_hint),
+                color = SentinelMuted,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            OutlinedButton(
+                onClick = {
+                    settings.signaturePersonal = sigPersonal
+                    settings.signatureShared = sigShared
+                    note = context.getString(R.string.settings_signature_saved)
+                },
+                modifier = Modifier.padding(top = 8.dp),
+            ) { Text(stringResource(R.string.save)) }
+            Divider()
+            Text(stringResource(R.string.settings_cache), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(
+                    R.string.settings_cache_size,
+                    MailText.formatBytes(cacheBytes),
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                stringResource(R.string.settings_cache_explainer),
+                color = SentinelMuted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(
+                onClick = {
+                    viewModel.cache.clearAccount()
+                    cacheBytes = 0L
+                    note = context.getString(R.string.settings_cache_cleared)
+                },
+                modifier = Modifier.padding(top = 8.dp),
+            ) { Text(stringResource(R.string.settings_cache_clear)) }
+            Divider()
+            Text(stringResource(R.string.settings_lock), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Lock Sentinel Mail", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.settings_lock_line), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Ask for biometrics, your device unlock, or your app PIN when the " +
-                            "app comes back after about five minutes away.",
+                        stringResource(R.string.settings_lock_explainer),
                         color = SentinelMuted,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -174,7 +359,11 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(10.dp))
             TextButton(onClick = { pinDialog = true }) {
-                Text(if (hasPin) "Change app PIN" else "Set an app PIN")
+                Text(
+                    stringResource(
+                        if (hasPin) R.string.settings_pin_change else R.string.settings_pin_set,
+                    ),
+                )
             }
             if (hasPin) {
                 TextButton(onClick = {
@@ -189,11 +378,11 @@ fun SettingsScreen(
                     if (lockEnabled) {
                         lockEnabled = false
                         settings.appLockEnabled = false
-                        note = "PIN removed and the app lock turned off — set a new PIN to turn the lock back on."
+                        note = context.getString(R.string.settings_pin_removed_lock_note)
                     } else {
-                        note = "PIN removed."
+                        note = context.getString(R.string.settings_pin_removed_note)
                     }
-                }) { Text("Remove PIN") }
+                }) { Text(stringResource(R.string.settings_pin_remove)) }
             }
             Divider()
             Button(
@@ -203,10 +392,9 @@ fun SettingsScreen(
                     contentColor = MaterialTheme.colorScheme.onError,
                 ),
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Sign out") }
+            ) { Text(stringResource(R.string.settings_sign_out)) }
             Text(
-                "Sign-out removes your password and settings from this phone and stops the " +
-                    "periodic checks. Your mail itself stays on the server, untouched.",
+                stringResource(R.string.settings_signout_explainer),
                 color = SentinelMuted,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
@@ -216,13 +404,37 @@ fun SettingsScreen(
                 Text(note!!, color = SentinelMuted)
             }
             Divider()
+            // About (1.2.0): the real logo, the version the phone
+            // is actually running, and the server identity — the
+            // three things About exists to answer.
+            Text(stringResource(R.string.settings_about), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            Image(
+                painter = painterResource(R.drawable.sentinel_logo),
+                contentDescription = stringResource(R.string.logo_description),
+                modifier = Modifier.size(96.dp),
+            )
+            Spacer(Modifier.height(10.dp))
             Text(
-                "Sentinel Mail ${BuildConfig.VERSION_NAME}",
-                color = SentinelMuted,
-                style = MaterialTheme.typography.labelMedium,
+                stringResource(
+                    R.string.settings_about_version,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE,
+                ),
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
-                "Sentinel Safeguard LLC — your mail, from your own server, with no one in between.",
+                stringResource(R.string.settings_about_tagline),
+                color = SentinelMuted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                stringResource(R.string.settings_about_server),
+                color = SentinelMuted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                stringResource(R.string.settings_about_line),
                 color = SentinelMuted,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -237,7 +449,7 @@ fun SettingsScreen(
                 secure.setPin(pin)
                 hasPin = true
                 pinDialog = false
-                note = "PIN set. Only a scrambled verifier is stored — never the PIN itself."
+                note = context.getString(R.string.settings_pin_set_note)
                 if (pendingLockAfterPin) {
                     lockEnabled = true
                     settings.appLockEnabled = true
@@ -250,18 +462,20 @@ fun SettingsScreen(
     if (confirmSignOut) {
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
-            title = { Text("Sign out of Sentinel Mail?") },
+            title = { Text(stringResource(R.string.settings_signout_title)) },
             text = {
-                Text("Your password and settings are removed from this phone. Your mail stays on the server.")
+                Text(stringResource(R.string.settings_signout_body))
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmSignOut = false
                     viewModel.signOut()
-                }) { Text("Sign out") }
+                }) { Text(stringResource(R.string.settings_sign_out)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmSignOut = false }) { Text("Stay signed in") }
+                TextButton(onClick = { confirmSignOut = false }) {
+                    Text(stringResource(R.string.settings_signout_stay))
+                }
             },
         )
     }
@@ -280,13 +494,15 @@ private fun PinDialog(
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    val pinShort = stringResource(R.string.settings_pin_short)
+    val pinMismatch = stringResource(R.string.settings_pin_mismatch)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("App PIN") },
+        title = { Text(stringResource(R.string.settings_pin_dialog_title)) },
         text = {
             Column {
                 Text(
-                    "At least 4 digits. The PIN is never stored — only a scrambled check of it.",
+                    stringResource(R.string.settings_pin_explainer),
                     color = SentinelMuted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -294,7 +510,7 @@ private fun PinDialog(
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { pin = it.filter { c -> c.isDigit() }.take(12) },
-                    label = { Text("New PIN") },
+                    label = { Text(stringResource(R.string.settings_pin_new)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -303,7 +519,7 @@ private fun PinDialog(
                 OutlinedTextField(
                     value = confirm,
                     onValueChange = { confirm = it.filter { c -> c.isDigit() }.take(12) },
-                    label = { Text("Repeat PIN") },
+                    label = { Text(stringResource(R.string.settings_pin_repeat)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -317,14 +533,14 @@ private fun PinDialog(
         confirmButton = {
             TextButton(onClick = {
                 when {
-                    pin.length < 4 -> error = "Use at least 4 digits."
-                    pin != confirm -> error = "The two entries don't match."
+                    pin.length < 4 -> error = pinShort
+                    pin != confirm -> error = pinMismatch
                     else -> onSave(pin)
                 }
-            }) { Text("Save PIN") }
+            }) { Text(stringResource(R.string.settings_pin_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }
