@@ -44,6 +44,7 @@ fun SignInScreen(viewModel: MailViewModel) {
     var address by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var errorShakeTrigger by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
     var host by remember { mutableStateOf("") }
@@ -54,7 +55,8 @@ fun SignInScreen(viewModel: MailViewModel) {
         Modifier
             .fillMaxSize()
             .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .errorShake(errorShakeTrigger),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(24.dp))
@@ -147,6 +149,9 @@ fun SignInScreen(viewModel: MailViewModel) {
                 ) { err ->
                     busy = false
                     error = err
+                    // M-13: a refused sign-in shakes once — the
+                    // words above the button carry the reason.
+                    if (err != null) errorShakeTrigger++
                 }
             },
             enabled = !busy && address.contains("@") && password.isNotEmpty(),

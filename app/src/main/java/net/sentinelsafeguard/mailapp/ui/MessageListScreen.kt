@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -62,6 +63,7 @@ import net.sentinelsafeguard.mailapp.data.mail.ComposeModel
 import net.sentinelsafeguard.mailapp.data.mail.MailRules
 import net.sentinelsafeguard.mailapp.data.mail.MailSummary
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelDanger
+import net.sentinelsafeguard.mailapp.ui.theme.SentinelGreen
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelGreenDim
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
@@ -143,10 +145,11 @@ fun MessageListScreen(
         pending = PendingSwipe(summary, kind, job)
     }
 
+    val tick = rememberHapticTick()
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(displayFolderName(folder, MailRules.isSharedFolder(folder))) },
+                title = { Text(MailRules.displayName(folder)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back to folders")
@@ -163,7 +166,14 @@ fun MessageListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onCompose) {
+            // Estate emerald, set explicitly (1.1.0) — see the
+            // folder list's FAB note; the Material default must
+            // never reach this button again.
+            FloatingActionButton(
+                onClick = { tick(); onCompose() },
+                containerColor = SentinelGreen,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
                 Icon(Icons.Filled.Edit, contentDescription = "Write a new message")
             }
         },
@@ -217,7 +227,13 @@ fun MessageListScreen(
                     }
                     error != null && shown.isEmpty() -> {
                         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                            Text(error!!, color = MaterialTheme.colorScheme.error)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(error!!, color = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.height(14.dp))
+                                Button(onClick = { loading = true; reload(force = true) }) {
+                                    Text("Try again")
+                                }
+                            }
                         }
                     }
                     shown.isEmpty() -> {
@@ -234,10 +250,11 @@ fun MessageListScreen(
                     }
                     else -> {
                         LazyColumn(Modifier.fillMaxSize()) {
-                            items(shown, key = { it.uid }) { summary ->
+                            itemsIndexed(shown, key = { _, s -> s.uid }) { index, summary ->
                                 MessageRow(
                                     summary = summary,
                                     isDrafts = isDrafts,
+                                    modifier = Modifier.listEntrance(index),
                                     onOpen = {
                                         if (isDrafts) {
                                             scope.launch {
@@ -257,6 +274,13 @@ fun MessageListScreen(
                                                 viewModel.setStarred(folder, summary.uid, !summary.starred)
                                                 val updated = summary.copy(starred = !summary.starred)
                                                 messages = messages.map { if (it.uid == summary.uid) updated else it }
+                                                // 1.1.0 fix: search results are the
+                                                // VISIBLE list while searching, and
+                                                // 1.0.0 updated only the hidden one —
+                                                // the star looked dead in search.
+                                                searchResults = searchResults?.map {
+                                                    if (it.uid == summary.uid) updated else it
+                                                }
                                             } catch (e: Exception) {
                                                 error = MailViewModel.friendlyError(e)
                                             }
@@ -279,6 +303,7 @@ fun MessageListScreen(
 private fun MessageRow(
     summary: MailSummary,
     isDrafts: Boolean,
+    modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onToggleStar: () -> Unit,
     onSwipe: (PendingSwipe.Kind) -> Unit,
@@ -296,6 +321,7 @@ private fun MessageRow(
             }
         },
     )
+    Column(modifier) {
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = !isDrafts,
@@ -379,4 +405,5 @@ private fun MessageRow(
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+    }
 }

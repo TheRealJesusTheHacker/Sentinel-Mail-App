@@ -46,20 +46,57 @@ val SentinelDanger = Color(0xFFB03A2E)
 val SentinelDangerText = Color(0xFFFFFFFF)
 val SentinelOutline = Color(0xFF2A3A2A)
 
+/**
+ * The FULL estate scheme (1.1.0). Every ColorScheme role is set
+ * explicitly — this is not decoration: darkColorScheme() fills
+ * any role left unset from the Material3 baseline, whose dark
+ * primaryContainer is a deep purple (#4F378B family). The 1.0.0
+ * scheme left primaryContainer (and most container / inverse /
+ * surface-tier roles) unset, which is exactly why the compose
+ * FloatingActionButtons — whose default container color is
+ * primaryContainer, not primary — rendered purple on a green-
+ * primary theme. No role may be left to the baseline again.
+ * Amber appears only as tertiary, fenced to warning semantics
+ * (see SentinelAmber above); scrim is true black; surfaceTint is
+ * pinned to the surface color so elevation never tints content.
+ */
 private val SentinelColors = darkColorScheme(
     primary = SentinelGreen,
     onPrimary = Color(0xFF031007),
+    primaryContainer = SentinelSurfaceTop,
+    onPrimaryContainer = SentinelText,
+    inversePrimary = SentinelGreenDim,
     secondary = SentinelGreenDim,
     onSecondary = Color(0xFF031007),
+    secondaryContainer = SentinelSurfaceHigh,
+    onSecondaryContainer = SentinelText,
+    tertiary = SentinelAmber,
+    onTertiary = Color(0xFF241A00),
+    tertiaryContainer = SentinelSurfaceHigh,
+    onTertiaryContainer = SentinelAmber,
     background = SentinelBlack,
     onBackground = SentinelText,
     surface = SentinelSurface,
     onSurface = SentinelText,
     surfaceVariant = SentinelSurfaceHigh,
     onSurfaceVariant = SentinelMuted,
+    surfaceTint = SentinelSurface,
+    inverseSurface = SentinelText,
+    inverseOnSurface = SentinelBlack,
     error = SentinelDanger,
     onError = SentinelDangerText,
+    errorContainer = Color(0xFF4A1710),
+    onErrorContainer = Color(0xFFFFDAD4),
     outline = SentinelOutline,
+    outlineVariant = Color(0xFF1E2B1E),
+    scrim = Color(0xFF000000),
+    surfaceBright = SentinelSurfaceTop,
+    surfaceDim = SentinelBlack,
+    surfaceContainerLowest = SentinelBlack,
+    surfaceContainerLow = SentinelSurfaceLow,
+    surfaceContainer = SentinelSurface,
+    surfaceContainerHigh = SentinelSurfaceHigh,
+    surfaceContainerHighest = SentinelSurfaceTop,
 )
 
 /**

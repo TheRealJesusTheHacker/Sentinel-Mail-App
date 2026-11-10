@@ -1,5 +1,6 @@
 package net.sentinelsafeguard.mailapp.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -118,17 +119,23 @@ fun SettingsScreen(
                 0 to "Manual only — check when you open a folder",
             )
             options.forEach { (minutes, label) ->
+                // The whole row selects (1.1.0 — 1.0.0 wired only
+                // the radio circle, so tapping the label did
+                // nothing, the classic dead-control shape).
+                val select = {
+                    interval = minutes
+                    settings.checkIntervalMinutes = minutes
+                    NewMailWorker.reschedule(context)
+                }
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = select),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(
                         selected = interval == minutes,
-                        onClick = {
-                            interval = minutes
-                            settings.checkIntervalMinutes = minutes
-                            NewMailWorker.reschedule(context)
-                        },
+                        onClick = select,
                     )
                     Text(label, style = MaterialTheme.typography.bodyLarge)
                 }
@@ -173,7 +180,19 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     secure.clearPin()
                     hasPin = false
-                    if (!lockEnabled) note = "PIN removed."
+                    // 1.1.0 fix: 1.0.0 could remove the PIN while
+                    // the lock stayed ON — leaving a lock whose
+                    // only fallback was the lock screen's no-PIN
+                    // path, a weaker lock than the settings
+                    // claimed. Removing the PIN now turns the lock
+                    // off with it, and says so.
+                    if (lockEnabled) {
+                        lockEnabled = false
+                        settings.appLockEnabled = false
+                        note = "PIN removed and the app lock turned off — set a new PIN to turn the lock back on."
+                    } else {
+                        note = "PIN removed."
+                    }
                 }) { Text("Remove PIN") }
             }
             Divider()

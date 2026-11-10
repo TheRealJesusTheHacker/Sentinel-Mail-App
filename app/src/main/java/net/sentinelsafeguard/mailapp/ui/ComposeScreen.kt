@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.sentinelsafeguard.mailapp.data.mail.ComposeAttachment
 import net.sentinelsafeguard.mailapp.data.mail.ComposeModel
@@ -98,8 +100,19 @@ fun ComposeScreen(
     }
     var error by remember { mutableStateOf<String?>(null) }
     var sending by remember { mutableStateOf(false) }
+    var sentDone by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    val sendHaptic = rememberPrimaryHaptic()
+
+    /** Nothing typed, nothing attached, not an existing draft:
+     * there is nothing to discard, so the back arrow just leaves
+     * (1.1.0 — 1.0.0 demanded a discard decision for an empty
+     * compose, a dialog guarding nothing). */
+    fun isPristine(): Boolean =
+        model.to.isBlank() && model.cc.isBlank() && model.bcc.isBlank() &&
+            model.subject.isBlank() && model.body.isBlank() &&
+            model.attachments.isEmpty() && model.draftUid == null
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -161,7 +174,7 @@ fun ComposeScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { confirmDiscard = true }) {
+                    IconButton(onClick = { if (isPristine()) onDone() else confirmDiscard = true }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Discard and go back")
                     }
                 },
@@ -254,7 +267,7 @@ fun ComposeScreen(
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                     Icon(Icons.Filled.AttachFile, null, Modifier.padding(end = 6.dp))
                     Text(
-                        "${att.fileName} (${att.bytes.size / 1024} KB)",
+                        "${att.fileName} (${MailText.formatBytes(att.bytes.size.toLong())})",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -274,8 +287,17 @@ fun ComposeScreen(
                 Text(error!!, color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(16.dp))
+            // M-08 send morph (1.1.0): one button carries idle →
+            // sending → sent. On success it resolves into the
+            // M-06 drawn tick with the confirming haptic, rests
+            // a beat, and only then leaves — the owner SEES the
+            // send land. Sending is a trust moment: morph + drawn
+            // tick only, no confetti, per the owner's ruling.
+            // On failure the button returns to its label and the
+            // error line carries what happened, as before.
             Button(
                 onClick = {
+                    if (sending || sentDone) return@Button
                     val problem = validate()
                     if (problem != null) {
                         error = problem
@@ -286,6 +308,10 @@ fun ComposeScreen(
                     scope.launch {
                         try {
                             viewModel.send(fromFolder, model)
+                            sending = false
+                            sentDone = true
+                            sendHaptic()
+                            delay(MotionLogic.MORPH_HOLD_MS)
                             onDone()
                         } catch (e: Exception) {
                             error = MailViewModel.friendlyError(e)
@@ -293,18 +319,25 @@ fun ComposeScreen(
                         }
                     }
                 },
-                enabled = !sending && !saving,
+                enabled = !sending && !saving && !sentDone,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (sending) {
-                    CircularProgressIndicator(
+                when {
+                    sentDone -> DrawnTick(
+                        modifier = Modifier.size(20.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(end = 8.dp),
                     )
-                    Text("Sending…")
-                } else {
-                    Icon(Icons.Filled.Send, null, Modifier.padding(end = 8.dp))
-                    Text("Send")
+                    sending -> {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        Text("Sending…")
+                    }
+                    else -> {
+                        Icon(Icons.Filled.Send, null, Modifier.padding(end = 8.dp))
+                        Text("Send")
+                    }
                 }
             }
             Spacer(Modifier.height(24.dp))

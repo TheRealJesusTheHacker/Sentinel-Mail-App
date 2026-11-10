@@ -85,6 +85,17 @@ object MailText {
         "$newText\n\n----- Original message -----\nFrom: ${original.from}\n" +
             "Date: ${original.dateText}\nSubject: ${original.subject}\n\n${original.bodyText}"
 
+    /** A byte count as people read it ("512 B", "24 KB",
+     * "1.5 MB"). Shared by the read screen's attachment list and
+     * the compose screen's attachment rows (1.1.0 — compose used
+     * to render sub-KB files as "0 KB"). */
+    fun formatBytes(bytes: Long): String = when {
+        bytes < 0 -> "unknown size"
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    }
+
     /** The forwarded body header block. */
     fun forwardBody(newText: String, original: MailMessage): String {
         val head = "----- Forwarded message -----\nFrom: ${original.from}\n" +

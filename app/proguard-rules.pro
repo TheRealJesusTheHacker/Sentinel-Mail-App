@@ -106,3 +106,14 @@
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.security.auth.callback.**
 -dontwarn javax.security.sasl.**
+
+#   javax.annotation.Nullable / javax.annotation.concurrent.GuardedBy —
+#     JSR-305 annotations referenced from Tink bytecode (via
+#     security-crypto). jsr305 is not on this app's R8 library
+#     classpath; the annotations are compile-time-only and never
+#     loaded at runtime on Android. Provenance: R8's own
+#     missing_rules.txt prescription from the 1.0.0 Linode build
+#     (2026-11-09), where these two warnings were the only thing
+#     between the tree and a clean minifyRelease build.
+-dontwarn javax.annotation.Nullable
+-dontwarn javax.annotation.concurrent.GuardedBy

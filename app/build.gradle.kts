@@ -57,8 +57,16 @@ android {
         // TLS posture: platform chain validation + SPKI anchor
         // pinning), Keystore-backed credential storage, app lock,
         // periodic new-mail checks (honestly named — never "push").
-        versionCode = 1
-        versionName = "1.0.0"
+        // 1.1.0 (2026-11-10): the premium polish pass — folder
+        // canonical dedupe (the ×3 fix) + true-purpose labels,
+        // the full estate color scheme (no Material baseline
+        // purple anywhere; emerald compose FABs), the estate
+        // motion layer (screen transitions, M-09 entrances, the
+        // M-08 send morph with the M-06 drawn tick, haptics,
+        // reduced-motion honored throughout), and the premium
+        // audit fixes itemized in the program record.
+        versionCode = 2
+        versionName = "1.1.0"
 
         buildConfigField("String", "MAIL_HOST", "\"mail.sentinelsafeguard.net\"")
     }

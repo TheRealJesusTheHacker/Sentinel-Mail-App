@@ -1,10 +1,25 @@
 package net.sentinelsafeguard.mailapp.data.mail
 
-/** One row of the folder tree. Ported from the Command App. */
+/** One row of the folder tree. Ported from the Command App.
+ * [attributes] carries the server's LIST attributes for the
+ * folder (SPECIAL-USE flags like \Sent where the server offers
+ * them) so role and label decisions never guess from the name
+ * alone when the server has said outright. */
 data class MailFolder(
     val name: String,
     val unreadCount: Int,
     val shared: Boolean,
+    val attributes: Set<String> = emptySet(),
+)
+
+/** One raw LIST presentation of a folder, before canonical
+ * dedupe (see MailRules.dedupeFolders). A single real mailbox
+ * can arrive as several of these — bare and INBOX.-prefixed
+ * presentations of the same box — and this type is what the
+ * canned-LIST unit tests drive, with no mail library involved. */
+data class ListedFolder(
+    val name: String,
+    val attributes: Set<String> = emptySet(),
 )
 
 /** One row of a message list. Extended over the Command App's

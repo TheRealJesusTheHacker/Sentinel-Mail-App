@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material.icons.filled.ReplyAll
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,6 +63,7 @@ import kotlinx.coroutines.launch
 import net.sentinelsafeguard.mailapp.data.mail.HtmlSanitizer
 import net.sentinelsafeguard.mailapp.data.mail.MailMessage
 import net.sentinelsafeguard.mailapp.data.mail.MailRules
+import net.sentinelsafeguard.mailapp.data.mail.MailText
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
 /**
@@ -93,8 +95,9 @@ fun MessageReadScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var moveOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var loadNonce by remember { mutableStateOf(0) }
 
-    LaunchedEffect(folder, uid) {
+    LaunchedEffect(folder, uid, loadNonce) {
         try {
             val loaded = viewModel.loadMessage(folder, uid)
             message = loaded
@@ -126,7 +129,7 @@ fun MessageReadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(displayFolderName(folder, MailRules.isSharedFolder(folder))) },
+                title = { Text(MailRules.displayName(folder)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back to the list")
@@ -195,20 +198,36 @@ fun MessageReadScreen(
                             )
                         }
                         DropdownMenu(expanded = moveOpen, onDismissRequest = { moveOpen = false }) {
-                            viewModel.folders
-                                .map { it.name }
-                                .filter { !it.equals(folder, ignoreCase = true) }
-                                .forEach { target ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(displayFolderName(target, MailRules.isSharedFolder(target)))
-                                        },
-                                        onClick = {
-                                            moveOpen = false
-                                            act { viewModel.moveTo(folder, uid, target) }
-                                        },
-                                    )
-                                }
+                            val targets = viewModel.folders
+                                .filter { !it.name.equals(folder, ignoreCase = true) }
+                            if (targets.isEmpty()) {
+                                // 1.1.0 fix: an empty move menu rendered as
+                                // a control that did nothing. Say why, and
+                                // offer the refresh that fills it.
+                                DropdownMenuItem(
+                                    text = { Text("Folders have not loaded yet") },
+                                    enabled = false,
+                                    onClick = {},
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Reload folders") },
+                                    onClick = {
+                                        moveOpen = false
+                                        viewModel.loadFolders()
+                                    },
+                                )
+                            }
+                            targets.forEach { target ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(MailRules.displayName(target.name, target.attributes))
+                                    },
+                                    onClick = {
+                                        moveOpen = false
+                                        act { viewModel.moveTo(folder, uid, target.name) }
+                                    },
+                                )
+                            }
                         }
                     }
                 },
@@ -222,7 +241,11 @@ fun MessageReadScreen(
         when {
             error != null && msg == null -> {
                 Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text(error!!, color = MaterialTheme.colorScheme.error)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(error!!, color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(14.dp))
+                        Button(onClick = { error = null; loadNonce++ }) { Text("Try again") }
+                    }
                 }
             }
             msg == null -> {
@@ -351,7 +374,7 @@ fun MessageReadScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Icon(Icons.Filled.AttachFile, null, Modifier.padding(end = 6.dp))
-                                    Text("${att.fileName} (${formatSize(att.sizeBytes)})")
+                                    Text("${att.fileName} (${MailText.formatBytes(att.sizeBytes)})")
                                 }
                                 Spacer(Modifier.height(8.dp))
                             }
@@ -433,8 +456,4 @@ private fun FormattedMailView(html: String, loadImages: Boolean) {
     )
 }
 
-private fun formatSize(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    else -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
-}
+

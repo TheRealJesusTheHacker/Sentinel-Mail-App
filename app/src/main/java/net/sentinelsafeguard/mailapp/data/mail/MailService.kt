@@ -22,6 +22,7 @@ import jakarta.activation.DataHandler
 import jakarta.mail.util.ByteArrayDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.eclipse.angus.mail.imap.IMAPFolder
 import net.sentinelsafeguard.mailapp.config.MailConfig
 import java.io.InputStream
 import java.text.SimpleDateFormat
@@ -114,28 +115,52 @@ class MailService(
             }
         }
 
+    /**
+     * The folder tree, one row per real mailbox (1.1.0).
+     *
+     * The LIST reply is NOT the tree: Dovecot presents each
+     * personal mailbox under several paths at once (bare,
+     * INBOX.-prefixed, and the inbox's own alias presentations),
+     * and the 1.0.0 code mapped LIST lines 1:1 into the UI — the
+     * owner's "everything times three." The raw presentations are
+     * now canonicalized and collapsed by [MailRules.dedupeFolders]
+     * BEFORE any folder is opened, so duplicate presentations
+     * cost no extra server round-trips either; unread counts are
+     * fetched once per surviving mailbox. SPECIAL-USE attributes
+     * ride along on the result for role/label decisions.
+     */
     suspend fun listFolders(username: String, password: String): List<MailFolder> =
         withContext(Dispatchers.IO) {
             withStore(username, password) { store ->
-                val folders = store.defaultFolder.list("*")
+                val listed = store.defaultFolder.list("*")
                     .filter { it.exists() }
-                folders.map { folder ->
+                val raw = listed.map { folder ->
+                    ListedFolder(
+                        name = folder.fullName,
+                        attributes = runCatching {
+                            (folder as? IMAPFolder)?.attributes?.toSet()
+                        }.getOrNull() ?: emptySet(),
+                    )
+                }
+                MailRules.dedupeFolders(raw).map { entry ->
                     val unread = runCatching {
+                        val folder = store.getFolder(entry.name)
                         folder.open(Folder.READ_ONLY)
                         val count = folder.unreadMessageCount
                         folder.close(false)
                         count
                     }.getOrDefault(0)
                     MailFolder(
-                        name = folder.fullName,
+                        name = entry.name,
                         unreadCount = unread,
-                        shared = MailRules.isSharedFolder(folder.fullName),
+                        shared = MailRules.isSharedFolder(entry.name),
+                        attributes = entry.attributes,
                     )
                 }.sortedWith(
                     compareBy(
                         { it.shared },
-                        { MailRules.sortKey(it.name) },
-                        { it.name.lowercase() },
+                        { MailRules.sortKey(MailRules.roleOf(it.name, it.attributes)) },
+                        { MailRules.displayName(it.name, it.attributes).lowercase() },
                     )
                 )
             }
