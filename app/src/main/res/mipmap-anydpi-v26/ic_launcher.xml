@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive icon: brand-black background + the owner's real logo
-     lockup as the foreground (raster PNGs generated from
-     your_files/brand/sentinel-safeguard-logo.jpg; see
-     LauncherIconTest for the byte pins). No monochrome layer: a
-     monochrome rendering would require redrawing the lockup,
-     which the LOGO RULE forbids; themed rendering falls back to
+<!-- Adaptive icon: brand-black background + the Sentinel Mail
+     mark as the foreground (raster PNGs mechanically derived from
+     the owner-approved artwork preserved at
+     brand/sentinel-mail-icon-master.png; see LauncherIconTest for
+     the byte pins). The mark is the Mail App's OWN product icon —
+     concept A, commissioned and approved by the owner 2026-11-10
+     ("different from the actual logo — similar not same"): the
+     Sentinel triangle with the envelope flap folded into it. It
+     replaces the launcher/notification marks ONLY; every in-app
+     company surface keeps the real Sentinel Safeguard logo. No
+     monochrome layer, as before: themed rendering falls back to
      the full icon. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />

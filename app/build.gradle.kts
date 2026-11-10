@@ -81,8 +81,16 @@ android {
         // searches, full EN/ES string externalization, quota when
         // the server answers, and the About block. Itemized in the
         // program record's 1.2.0 section.
-        versionCode = 3
-        versionName = "1.2.0"
+        // 1.2.1 (2026-11-10): the Mail App's own icon — concept A,
+        // commissioned and approved by the owner ("different from
+        // the actual logo — similar not same"): the Sentinel
+        // triangle with the envelope flap folded into it, emerald
+        // on #060806. Launcher package + notification silhouette
+        // only, mechanically derived from the approved master at
+        // brand/sentinel-mail-icon-master.png; every in-app
+        // company surface keeps the real Sentinel Safeguard logo.
+        versionCode = 4
+        versionName = "1.2.1"
 
         buildConfigField("String", "MAIL_HOST", "\"mail.sentinelsafeguard.net\"")
     }
