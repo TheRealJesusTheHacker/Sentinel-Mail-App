@@ -98,6 +98,52 @@ class CacheTest {
         assertEquals(plain, CacheJson.messageFromJson(CacheJson.messageToJson(plain)))
     }
 
+    // ---- 1.2.2 audit fixes: manifest saved-at (D2), cap guard (D4) ----
+
+    @Test
+    fun manifestKeepsSavedAtDistinctFromLastAccess() {
+        // D2: the "saved copy" label reads the WRITE time. A
+        // record saved Monday and read Friday must still say
+        // Monday — the read touches only the eviction clock.
+        val entry = CachePolicy.ManifestEntry(
+            key = "a".repeat(64),
+            kind = CachePolicy.Kind.SUMMARIES,
+            sizeBytes = 1234L,
+            savedAtMs = 1_000L,
+            lastAccessMs = 9_000L,
+        )
+        val back = CacheJson.manifestFromJson(
+            CacheJson.manifestToJson(mapOf(entry.key to entry)),
+        )
+        assertEquals(mapOf(entry.key to entry), back)
+        assertEquals(1_000L, back.getValue(entry.key).savedAtMs)
+        assertEquals(9_000L, back.getValue(entry.key).lastAccessMs)
+    }
+
+    @Test
+    fun legacyManifestRowWithoutSavedFallsBackToAccessTime() {
+        // Pre-1.2.2 manifests have no "saved" field: the access
+        // time stands in (the old semantics, for old rows only),
+        // and a damaged manifest decodes to empty, never throws.
+        val legacy = """{"k1":{"kind":"MESSAGE","size":42,"at":777}}"""
+        val back = CacheJson.manifestFromJson(legacy)
+        assertEquals(777L, back.getValue("k1").savedAtMs)
+        assertEquals(777L, back.getValue("k1").lastAccessMs)
+        assertEquals(CachePolicy.Kind.MESSAGE, back.getValue("k1").kind)
+        assertTrue(CacheJson.manifestFromJson("not json").isEmpty())
+        assertTrue(CacheJson.manifestFromJson(null).isEmpty())
+    }
+
+    @Test
+    fun oversizedRecordIsNeverCached() {
+        // D4: one record larger than the whole budget is skipped,
+        // not written over an evicted-everything cache.
+        assertTrue(CachePolicy.shouldCache(0L))
+        assertTrue(CachePolicy.shouldCache(CachePolicy.MAX_TOTAL_BYTES))
+        assertTrue(!CachePolicy.shouldCache(CachePolicy.MAX_TOTAL_BYTES + 1L))
+        assertTrue(!CachePolicy.shouldCache(-1L))
+    }
+
     @Test
     fun correspondentsRoundTrip() {
         val entries = listOf(

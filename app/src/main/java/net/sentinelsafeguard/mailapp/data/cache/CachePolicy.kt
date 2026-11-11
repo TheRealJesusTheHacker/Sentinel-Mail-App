@@ -44,6 +44,33 @@ object CachePolicy {
         val lastAccessMs: Long,
     )
 
+    /**
+     * One row of the on-disk manifest: what the index knows
+     * about a record. [savedAtMs] is when the record was WRITTEN
+     * — the "saved copy" labels read it. [lastAccessMs] is the
+     * eviction clock, touched by reads. Two different numbers on
+     * purpose: before 1.2.2 the label read the access time, so a
+     * record read while offline re-stamped itself "saved just
+     * now" (audit finding D2).
+     */
+    data class ManifestEntry(
+        val key: String,
+        val kind: Kind,
+        val sizeBytes: Long,
+        val savedAtMs: Long,
+        val lastAccessMs: Long,
+    )
+
+    /**
+     * A single record larger than the whole budget is never
+     * cached: evicting everything else to make room would still
+     * leave the cache over its cap. (1.2.0's policy text already
+     * promised the caller skips such a record; 1.2.2 makes the
+     * write path actually do it — audit finding D4.)
+     */
+    fun shouldCache(incomingBytes: Long, capBytes: Long = MAX_TOTAL_BYTES): Boolean =
+        incomingBytes in 0..capBytes
+
     fun sha256Hex(text: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(text.toByteArray(Charsets.UTF_8))

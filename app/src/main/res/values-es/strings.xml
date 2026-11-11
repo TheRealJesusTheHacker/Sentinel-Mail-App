@@ -62,6 +62,10 @@
     <!-- message list -->
     <string name="search_hint_this_folder">Buscar en esta carpeta</string>
     <string name="search_hint_all_folders">Buscar en todas las carpetas</string>
+    <string name="search_filter_all">Todo</string>
+    <string name="search_filter_unread">No leídos</string>
+    <string name="search_filter_starred">Destacados</string>
+    <string name="search_filter_attachments">Con adjuntos</string>
     <string name="search_scope_all">Buscando en cada carpeta — asunto, remitente y cuerpo. Cada resultado dice en qué carpeta está.</string>
     <string name="search_scope_some_failed">Se buscó en %1$d de %2$d carpetas — el servidor rechazó %3$s.</string>
     <string name="search_results_capped">Se muestran los primeros %1$d resultados.</string>

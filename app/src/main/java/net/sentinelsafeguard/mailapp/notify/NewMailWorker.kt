@@ -48,8 +48,16 @@ class NewMailWorker(
                     settings.lastSeenInboxUid = maxUid
                 }
                 maxUid > lastUid -> {
+                    // Headers only, and a window wide enough for a
+                    // busy interval: 1.2.0/1.2.1 peeked at the
+                    // newest 25 WITH body snippets, so a burst
+                    // larger than 25 was silently undercounted
+                    // while the baseline jumped past it (D11).
                     val fresh = service
-                        .listMessages(account.address, account.password, "INBOX", limit = 25)
+                        .listMessages(
+                            account.address, account.password, "INBOX",
+                            limit = 100, snippets = false,
+                        )
                         .filter { it.uid > lastUid && it.unread }
                     if (settings.notificationsEnabled) {
                         // One arrival gets its own tappable

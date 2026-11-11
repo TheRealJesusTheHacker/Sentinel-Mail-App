@@ -2,6 +2,14 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="sentinel_mail_secure_store.xml" />
+        <!-- 1.2.2 (audit fix): the plain settings file carries
+             mailbox metadata — snooze records include subjects,
+             plus recent searches, signatures, and the
+             always-load-images sender list. It is device-local
+             state, not credentials, but it is still mail content:
+             it does not ride backups either. Restores start with
+             fresh settings, same as they start signed out. -->
+        <exclude domain="sharedpref" path="sentinel_mail_settings.xml" />
         <!-- 1.2.0: the offline mail cache is device-local by
              design (its encryption key never leaves the Keystore,
              so a restored copy would be undecryptable anyway) —
@@ -10,6 +18,7 @@
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="sentinel_mail_secure_store.xml" />
+        <exclude domain="sharedpref" path="sentinel_mail_settings.xml" />
         <exclude domain="file" path="mailcache/" />
     </device-transfer>
 </data-extraction-rules>

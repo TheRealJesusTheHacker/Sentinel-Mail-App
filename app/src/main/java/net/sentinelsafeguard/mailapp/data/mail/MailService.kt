@@ -13,7 +13,9 @@ import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeBodyPart
 import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimeMultipart
+import jakarta.mail.search.AndTerm
 import jakarta.mail.search.BodyTerm
+import jakarta.mail.search.FlagTerm
 import jakarta.mail.search.FromStringTerm
 import jakarta.mail.search.OrTerm
 import jakarta.mail.search.SearchTerm
@@ -78,9 +80,23 @@ class MailService(
     private var cachedFolder: String? = null
     private var cachedSummaries: List<MailSummary> = emptyList()
 
+    /** The INBOX state (UIDVALIDITY + highest UID) observed by
+     * the most recent [listMessages] of the inbox on THIS service
+     * instance, or -1 when this instance hasn't listed it. The
+     * ViewModel's seen-marking reads it through [inboxState]
+     * instead of opening a second connection (1.2.2, audit
+     * finding D9) — and the value is exactly the page the user
+     * was shown, so mail that arrived after the listing is never
+     * baselined as "seen". The periodic worker builds a fresh
+     * service per run, so it always takes the live path. */
+    private var lastInboxValidity: Long = -1L
+    private var lastInboxMaxUid: Long = -1L
+
     fun clearCache() {
         cachedFolder = null
         cachedSummaries = emptyList()
+        lastInboxValidity = -1L
+        lastInboxMaxUid = -1L
     }
 
     private fun imapSession(): Session {
@@ -181,6 +197,12 @@ class MailService(
      * old box. */
     suspend fun inboxState(username: String, password: String): Pair<Long, Long> =
         withContext(Dispatchers.IO) {
+            // This instance just listed the inbox: answer from
+            // that listing, no second connection (see the field
+            // note). Anything else takes the live path.
+            if (lastInboxValidity >= 0L) {
+                return@withContext Pair(lastInboxValidity, lastInboxMaxUid)
+            }
             withStore(username, password) { store ->
                 val folder = store.getFolder("INBOX")
                 folder.open(Folder.READ_ONLY)
@@ -204,6 +226,7 @@ class MailService(
         folderName: String,
         limit: Int = 40,
         forceRefresh: Boolean = false,
+        snippets: Boolean = true,
     ): List<MailSummary> = withContext(Dispatchers.IO) {
         if (!forceRefresh && cachedFolder == folderName && cachedSummaries.isNotEmpty()) {
             return@withContext cachedSummaries
@@ -213,7 +236,13 @@ class MailService(
             folder.open(Folder.READ_ONLY)
             try {
                 val total = folder.messageCount
-                if (total == 0) return@withStore emptyList()
+                if (total == 0) {
+                    if (folderName.equals("INBOX", ignoreCase = true)) {
+                        lastInboxValidity = (folder as jakarta.mail.UIDFolder).uidValidity
+                        lastInboxMaxUid = 0L
+                    }
+                    return@withStore emptyList()
+                }
                 val start = maxOf(1, total - limit + 1)
                 val messages = folder.getMessages(start, total)
                 val profile = FetchProfile().apply {
@@ -240,8 +269,14 @@ class MailService(
                         // Extension over the port: a bounded peek at
                         // the first text part (per-section fetch —
                         // BODYSTRUCTURE is already in hand from
-                        // CONTENT_INFO), capped hard.
-                        snippet = runCatching { peekSnippet(message) }.getOrDefault(""),
+                        // CONTENT_INFO), capped hard. Callers that
+                        // only need headers (the periodic checker)
+                        // pass snippets = false and skip the peek.
+                        snippet = if (snippets) {
+                            runCatching { peekSnippet(message) }.getOrDefault("")
+                        } else {
+                            ""
+                        },
                         starred = message.isSet(Flags.Flag.FLAGGED),
                         hasAttachments = runCatching { structureHasAttachments(message) }
                             .getOrDefault(false),
@@ -256,6 +291,10 @@ class MailService(
                 }
                 cachedFolder = folderName
                 cachedSummaries = summaries
+                if (folderName.equals("INBOX", ignoreCase = true)) {
+                    lastInboxValidity = uidFolder.uidValidity
+                    lastInboxMaxUid = summaries.firstOrNull()?.uid ?: 0L
+                }
                 summaries
             } finally {
                 folder.close(false)
@@ -334,7 +373,19 @@ class MailService(
                     ?: throw IllegalStateException("That message could not be found.")
                 val part = findPartByIndex(message, partIndex)
                     ?: throw IllegalStateException("That attachment could not be found.")
-                part.inputStream.use { input -> readCapped(input, MAX_ATTACHMENT_BYTES) }
+                // Never hand back a silently truncated file
+                // (1.2.2, audit finding D5): over the cap is an
+                // honest refusal, not a partial download wearing
+                // the whole file's name.
+                val declared = runCatching { part.size.toLong() }.getOrDefault(-1L)
+                if (declared > MAX_ATTACHMENT_BYTES) {
+                    throw IllegalStateException(
+                        "That attachment is larger than the 25 MB limit, so it can't be downloaded whole."
+                    )
+                }
+                part.inputStream.use { input ->
+                    readCappedStrict(input, MAX_ATTACHMENT_BYTES)
+                }
             } finally {
                 folder.close(false)
             }
@@ -347,35 +398,69 @@ class MailService(
         folderName: String,
         query: String,
         limit: Int = 50,
+        filter: SearchFilter = SearchFilter.ALL,
     ): List<MailSummary> = withContext(Dispatchers.IO) {
         withStore(username, password) { store ->
-            val folder = store.getFolder(folderName)
-            folder.open(Folder.READ_ONLY)
-            try {
-                val term: SearchTerm = OrTerm(
-                    arrayOf(SubjectTerm(query), FromStringTerm(query), BodyTerm(query))
-                )
-                val found = folder.search(term).takeLast(limit).reversed()
-                val uidFolder = folder as jakarta.mail.UIDFolder
-                found.map { message ->
-                    MailSummary(
-                        uid = uidFolder.getUID(message),
-                        subject = message.subject ?: "(no subject)",
-                        from = formatAddresses(message.from),
-                        to = formatAddresses(message.allRecipients),
-                        dateText = formatDate(message.receivedDate ?: message.sentDate),
-                        unread = !message.isSet(Flags.Flag.SEEN),
-                        snippet = "",
-                        starred = message.isSet(Flags.Flag.FLAGGED),
-                        hasAttachments = false,
-                        folderName = folderName,
-                        messageId = runCatching { message.getHeader("Message-ID")?.firstOrNull() }
-                            .getOrNull(),
-                    )
-                }
-            } finally {
-                folder.close(false)
+            searchOnFolder(store, folderName, query, limit, filter)
+        }
+    }
+
+    /** One folder's search on an ALREADY-OPEN connection
+     * (1.2.2): the found set is fetched in ONE batched
+     * FetchProfile round — envelope, flags, and BODYSTRUCTURE —
+     * so attachment flags on search rows are real (1.2.0/1.2.1
+     * hardcoded them false and let every property read trickle
+     * out as its own round trip; audit findings D7/D8). */
+    private fun searchOnFolder(
+        store: Store,
+        folderName: String,
+        query: String,
+        limit: Int,
+        filter: SearchFilter = SearchFilter.ALL,
+    ): List<MailSummary> {
+        val folder = store.getFolder(folderName)
+        folder.open(Folder.READ_ONLY)
+        try {
+            val term: SearchTerm = searchTermFor(query, filter)
+            val found = folder.search(term).takeLast(limit).reversed()
+            if (found.isEmpty()) return emptyList()
+            val profile = FetchProfile().apply {
+                add(FetchProfile.Item.ENVELOPE)
+                add(FetchProfile.Item.FLAGS)
+                add(FetchProfile.Item.CONTENT_INFO)
+                add("Message-ID")
             }
+            folder.fetch(found.toTypedArray(), profile)
+            val uidFolder = folder as jakarta.mail.UIDFolder
+            val summaries = found.map { message ->
+                MailSummary(
+                    uid = uidFolder.getUID(message),
+                    subject = message.subject ?: "(no subject)",
+                    from = formatAddresses(message.from),
+                    to = formatAddresses(message.allRecipients),
+                    dateText = formatDate(message.receivedDate ?: message.sentDate),
+                    unread = !message.isSet(Flags.Flag.SEEN),
+                    snippet = "",
+                    starred = message.isSet(Flags.Flag.FLAGGED),
+                    hasAttachments = runCatching { structureHasAttachments(message) }
+                        .getOrDefault(false),
+                    folderName = folderName,
+                    messageId = runCatching { message.getHeader("Message-ID")?.firstOrNull() }
+                        .getOrNull(),
+                )
+            }
+            // ATTACHMENTS is the one filter with no server-side
+            // SEARCH term (IMAP has none): it narrows the fetched
+            // page on the structure-derived flags — real flags
+            // since the D7 fetch fix, and the cap disclosure in
+            // the UI covers the page it narrowed.
+            return if (filter == SearchFilter.ATTACHMENTS) {
+                summaries.filter { it.hasAttachments }
+            } else {
+                summaries
+            }
+        } finally {
+            folder.close(false)
         }
     }
 
@@ -392,16 +477,25 @@ class MailService(
         password: String,
         query: String,
         folderNames: List<String>,
+        filter: SearchFilter = SearchFilter.ALL,
     ): AllFolderSearch = withContext(Dispatchers.IO) {
         val perFolder = mutableListOf<List<MailSummary>>()
         val searched = mutableListOf<String>()
         val failed = mutableListOf<String>()
-        for (name in folderNames) {
-            try {
-                perFolder += search(username, password, name, query, SearchMerge.PER_FOLDER_CAP)
-                searched += name
-            } catch (e: Exception) {
-                failed += name
+        // ONE connection for the whole sweep (1.2.2): the
+        // 1.2.0 shape connected + logged in once per folder,
+        // which on a real mailbox is dozens of TLS handshakes
+        // standing between the user and their results.
+        withStore(username, password) { store ->
+            for (name in folderNames) {
+                try {
+                    perFolder += searchOnFolder(
+                        store, name, query, SearchMerge.PER_FOLDER_CAP, filter,
+                    )
+                    searched += name
+                } catch (e: Exception) {
+                    failed += name
+                }
             }
         }
         AllFolderSearch(
@@ -570,6 +664,35 @@ class MailService(
         }.getOrNull()
     }
 
+    /** The Message-ID of one message, headers only (1.2.2,
+     * audit finding D6): the folder opens READ_ONLY (EXAMINE —
+     * no \Seen is set) and no body is fetched. Snooze's fallback
+     * path uses this; 1.2.0/1.2.1 opened the whole message
+     * READ_WRITE just to learn the ID, marking the message read
+     * as a side effect of snoozing it. Null when the message is
+     * gone or carries no Message-ID. */
+    suspend fun messageIdForUid(
+        username: String,
+        password: String,
+        folderName: String,
+        uid: Long,
+    ): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            withStore(username, password) { store ->
+                val folder = store.getFolder(folderName)
+                folder.open(Folder.READ_ONLY)
+                try {
+                    val uidFolder = folder as jakarta.mail.UIDFolder
+                    val message = uidFolder.getMessageByUID(uid)
+                        ?: return@withStore null
+                    message.getHeader("Message-ID")?.firstOrNull()
+                } finally {
+                    folder.close(false)
+                }
+            }
+        }.getOrNull()
+    }
+
     /** Move a message identified by Message-ID (see above).
      * False when the message is gone — the snooze record is then
      * dropped, because there is nothing left to return. */
@@ -630,6 +753,11 @@ class MailService(
         withStore(username, password) { store ->
             val source = store.getFolder(fromFolder)
             source.open(Folder.READ_WRITE)
+            // The manual path flags \Deleted and needs the close
+            // to expunge; a successful IMAP MOVE leaves nothing
+            // to expunge and must not sweep other sessions'
+            // \Deleted mail on its way out.
+            var expungeOnClose = true
             try {
                 val uidFolder = source as jakarta.mail.UIDFolder
                 val message = uidFolder.getMessageByUID(uid)
@@ -640,11 +768,28 @@ class MailService(
                 // on a fresh mailbox) — the same pattern send()
                 // already used for Sent.
                 if (!target.exists()) target.create(Folder.HOLDS_MESSAGES)
-                source.copyMessages(arrayOf<Message>(message), target)
-                message.setFlag(Flags.Flag.DELETED, true)
+                // IMAP MOVE first (1.2.2, capability gap G1):
+                // Dovecot advertises the MOVE extension, which is
+                // ONE atomic operation instead of copy + flag +
+                // expunge — no window where the message exists
+                // twice, no expunge of other clients' \Deleted
+                // mail. Angus itself falls back when a server
+                // lacks MOVE; any failure here drops to the manual
+                // sequence below, which works everywhere.
+                val moved = runCatching {
+                    val imapSource = source as? IMAPFolder
+                        ?: throw IllegalStateException("Not an IMAP folder.")
+                    imapSource.moveMessages(arrayOf<Message>(message), target)
+                }.isSuccess
+                if (!moved) {
+                    source.copyMessages(arrayOf<Message>(message), target)
+                    message.setFlag(Flags.Flag.DELETED, true)
+                } else {
+                    expungeOnClose = false
+                }
                 invalidateCache()
             } finally {
-                source.close(true)
+                source.close(expungeOnClose)
             }
         }
     }
@@ -789,7 +934,12 @@ class MailService(
                             fileName = part.fileName ?: "attachment",
                             mimeType = runCatching { part.contentType.substringBefore(';') }
                                 .getOrDefault("application/octet-stream"),
-                            bytes = part.inputStream.use { readCapped(it, MAX_ATTACHMENT_BYTES) },
+                            // Strict, like downloads (D5): a
+                            // truncated draft attachment would be
+                            // re-sent corrupted under its real name.
+                            bytes = part.inputStream.use {
+                                readCappedStrict(it, MAX_ATTACHMENT_BYTES)
+                            },
                         )
                     },
                     draftUid = draftUid,
@@ -890,9 +1040,9 @@ class MailService(
         collectParts(message).any { isAttachment(it) }
 
     private fun peekSnippet(message: Message): String {
-        val part = collectParts(message)
-            .firstOrNull { it.isMimeType("text/plain") && !isAttachment(it) }
-            ?: collectParts(message).firstOrNull { it.isMimeType("text/html") && !isAttachment(it) }
+        val parts = collectParts(message)
+        val part = parts.firstOrNull { it.isMimeType("text/plain") && !isAttachment(it) }
+            ?: parts.firstOrNull { it.isMimeType("text/html") && !isAttachment(it) }
             ?: return ""
         val raw = part.inputStream.use { readCapped(it, SNIPPET_READ_CAP).toString(Charsets.UTF_8) }
         val text = if (part.isMimeType("text/html")) MailText.htmlToText(raw) else raw
@@ -940,6 +1090,19 @@ class MailService(
         return buffer.copyOf(read)
     }
 
+    /** [readCapped] where a truncated result would be a lie
+     * (downloads, draft attachments): reads one byte past the
+     * cap and refuses when the stream has more to give. */
+    private fun readCappedStrict(input: InputStream, cap: Int): ByteArray {
+        val bytes = readCapped(input, cap + 1)
+        if (bytes.size > cap) {
+            throw IllegalStateException(
+                "That attachment is larger than the 25 MB limit, so it can't be loaded whole."
+            )
+        }
+        return bytes
+    }
+
     private fun invalidateCache() {
         cachedFolder = null
         cachedSummaries = emptyList()
@@ -964,6 +1127,27 @@ class MailService(
          * photos are tens of KB), hard against a hostile part. */
         const val MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024
         const val MAX_INLINE_TOTAL_BYTES = 10 * 1024 * 1024
+    }
+}
+
+/** Search narrowing (1.2.2, capability gap G2). UNREAD and
+ * STARRED compose into the server-side SEARCH as flag terms —
+ * the server does the narrowing, not the phone. ATTACHMENTS
+ * has no IMAP SEARCH term; it narrows the fetched page on its
+ * structure-derived attachment flags (see searchOnFolder). */
+enum class SearchFilter { ALL, UNREAD, STARRED, ATTACHMENTS }
+
+/** The SEARCH term a query + filter compiles to. Internal and
+ * pure so the suite can pin the composition: the text legs are
+ * always subject OR sender OR body; flag filters AND on top. */
+internal fun searchTermFor(query: String, filter: SearchFilter): SearchTerm {
+    val text: SearchTerm = OrTerm(
+        arrayOf(SubjectTerm(query), FromStringTerm(query), BodyTerm(query))
+    )
+    return when (filter) {
+        SearchFilter.ALL, SearchFilter.ATTACHMENTS -> text
+        SearchFilter.UNREAD -> AndTerm(text, FlagTerm(Flags(Flags.Flag.SEEN), false))
+        SearchFilter.STARRED -> AndTerm(text, FlagTerm(Flags(Flags.Flag.FLAGGED), true))
     }
 }
 

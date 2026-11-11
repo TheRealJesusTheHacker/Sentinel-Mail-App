@@ -3,5 +3,9 @@
      1.2.0 adds the offline mail cache: same rule, same reason. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="sentinel_mail_secure_store.xml" />
+    <!-- 1.2.2 (audit fix): settings carry mail metadata (snooze
+         subjects, recent searches, signatures, sender list) —
+         device-local, excluded like the credential store. -->
+    <exclude domain="sharedpref" path="sentinel_mail_settings.xml" />
     <exclude domain="file" path="mailcache/" />
 </full-backup-content>

@@ -89,8 +89,8 @@ android {
         // only, mechanically derived from the approved master at
         // brand/sentinel-mail-icon-master.png; every in-app
         // company surface keeps the real Sentinel Safeguard logo.
-        versionCode = 4
-        versionName = "1.2.1"
+        versionCode = 5
+        versionName = "1.2.2"
 
         buildConfigField("String", "MAIL_HOST", "\"mail.sentinelsafeguard.net\"")
     }

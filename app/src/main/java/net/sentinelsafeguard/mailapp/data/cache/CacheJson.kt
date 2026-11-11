@@ -204,6 +204,48 @@ object CacheJson {
         }.getOrDefault(emptyList())
     }
 
+    // ---- manifest (the cleartext index: hashes/sizes/times only) ----
+
+    fun manifestToJson(entries: Map<String, CachePolicy.ManifestEntry>): String =
+        buildJsonObject {
+            for ((key, entry) in entries) {
+                put(
+                    key,
+                    buildJsonObject {
+                        put("kind", entry.kind.name)
+                        put("size", entry.sizeBytes)
+                        put("saved", entry.savedAtMs)
+                        put("at", entry.lastAccessMs)
+                    },
+                )
+            }
+        }.toString()
+
+    /** Total decode: a damaged manifest yields what parses,
+     * worst case empty (the index is rebuildable; the encrypted
+     * payloads it pointed at simply age out unreachable). A
+     * pre-1.2.2 manifest row has no "saved" — its write time is
+     * unknown, so the access time stands in (the old semantics,
+     * for old rows only). */
+    fun manifestFromJson(text: String?): Map<String, CachePolicy.ManifestEntry> {
+        if (text.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            json.parseToJsonElement(text).jsonObject.entries.mapNotNull { (key, el) ->
+                val obj = el as? JsonObject ?: return@mapNotNull null
+                val at = obj.long("at") ?: 0L
+                CachePolicy.ManifestEntry(
+                    key = key,
+                    kind = runCatching {
+                        CachePolicy.Kind.valueOf(obj.str("kind") ?: "")
+                    }.getOrDefault(CachePolicy.Kind.OTHER),
+                    sizeBytes = obj.long("size") ?: 0L,
+                    savedAtMs = obj.long("saved") ?: at,
+                    lastAccessMs = at,
+                )
+            }.associateBy { it.key }
+        }.getOrDefault(emptyMap())
+    }
+
     // ---- tiny typed readers ----
 
     private fun JsonObject.str(key: String): String? =

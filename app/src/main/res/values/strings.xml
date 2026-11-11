@@ -63,6 +63,10 @@
     <!-- message list -->
     <string name="search_hint_this_folder">Search this folder</string>
     <string name="search_hint_all_folders">Search all folders</string>
+    <string name="search_filter_all">All</string>
+    <string name="search_filter_unread">Unread</string>
+    <string name="search_filter_starred">Starred</string>
+    <string name="search_filter_attachments">With attachments</string>
     <string name="search_scope_all">Searching every folder — subject, sender, and body. Results say which folder each lives in.</string>
     <string name="search_scope_some_failed">Searched %1$d of %2$d folders — the server refused %3$s.</string>
     <string name="search_results_capped">Showing the first %1$d results.</string>

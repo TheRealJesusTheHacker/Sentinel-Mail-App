@@ -5,12 +5,6 @@ import androidx.security.crypto.EncryptedFile
 import androidx.security.crypto.MasterKey
 import java.io.File
 import java.nio.charset.StandardCharsets
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
-import kotlinx.serialization.json.put
 import net.sentinelsafeguard.mailapp.data.mail.AddressBook
 import net.sentinelsafeguard.mailapp.data.mail.MailFolder
 import net.sentinelsafeguard.mailapp.data.mail.MailMessage
@@ -110,11 +104,13 @@ class MailCache(context: Context) {
 
     // ---- housekeeping ----
 
-    /** When a record was saved (epoch ms), for the "saved copy"
-     * labels; 0 when there is no record. */
+    /** When a record was SAVED (epoch ms), for the "saved copy"
+     * labels; 0 when there is no record. This is the write time,
+     * never the last-read time — reads touch the eviction clock
+     * only (1.2.2, audit finding D2). */
     fun savedAtMs(kind: CachePolicy.Kind, name: String): Long {
         val key = key(kind, name) ?: return 0L
-        return manifest()[key]?.lastAccessMs ?: 0L
+        return manifest()[key]?.savedAtMs ?: 0L
     }
 
     /** Total bytes the cache occupies on disk (payloads only —
@@ -139,13 +135,6 @@ class MailCache(context: Context) {
 
     // ---- storage plumbing ----
 
-    private data class ManifestEntry(
-        val key: String,
-        val kind: CachePolicy.Kind,
-        val sizeBytes: Long,
-        val lastAccessMs: Long,
-    )
-
     private fun key(kind: CachePolicy.Kind, name: String): String? =
         accountKey?.let { CachePolicy.fileKey(it, kind, name) }
 
@@ -156,6 +145,10 @@ class MailCache(context: Context) {
     private fun write(kind: CachePolicy.Kind, name: String, payload: String) {
         val key = key(kind, name) ?: return
         val bytes = payload.toByteArray(StandardCharsets.UTF_8)
+        // A record bigger than the whole budget is not cached at
+        // all (CachePolicy.shouldCache) — evicting everything
+        // else for it would still break the cap.
+        if (!CachePolicy.shouldCache(bytes.size.toLong())) return
         try {
             // Eviction first: the cap is enforced BEFORE the new
             // bytes land, so the disk never exceeds it by more
@@ -176,8 +169,15 @@ class MailCache(context: Context) {
                 masterKey,
                 EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB,
             ).build().openFileOutput().use { it.write(bytes) }
+            val now = System.currentTimeMillis()
             val updated = kept.toMutableMap()
-            updated[key] = ManifestEntry(key, kind, bytes.size.toLong(), System.currentTimeMillis())
+            updated[key] = CachePolicy.ManifestEntry(
+                key = key,
+                kind = kind,
+                sizeBytes = bytes.size.toLong(),
+                savedAtMs = now,
+                lastAccessMs = now,
+            )
             rewriteManifest(updated)
         } catch (e: Exception) {
             // A cache write failure is a shrug, never a crash.
@@ -217,44 +217,17 @@ class MailCache(context: Context) {
     private fun applicationContext(): Context = appContext
 
     @Synchronized
-    private fun manifest(): Map<String, ManifestEntry> {
+    private fun manifest(): Map<String, CachePolicy.ManifestEntry> {
         val file = manifestFile()
         if (!file.exists()) return emptyMap()
-        return try {
-            val root = Json.parseToJsonElement(file.readText()).jsonObject
-            root.entries.mapNotNull { (key, el) ->
-                val obj = el.jsonObject
-                val kindName = obj["kind"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                ManifestEntry(
-                    key = key,
-                    kind = runCatching { CachePolicy.Kind.valueOf(kindName) }
-                        .getOrDefault(CachePolicy.Kind.OTHER),
-                    sizeBytes = obj["size"]?.jsonPrimitive?.long ?: 0L,
-                    lastAccessMs = obj["at"]?.jsonPrimitive?.long ?: 0L,
-                )
-            }.associateBy { it.key }
-        } catch (e: Exception) {
-            emptyMap()
-        }
+        return CacheJson.manifestFromJson(runCatching { file.readText() }.getOrNull())
     }
 
     @Synchronized
-    private fun rewriteManifest(entries: Map<String, ManifestEntry>) {
+    private fun rewriteManifest(entries: Map<String, CachePolicy.ManifestEntry>) {
         try {
-            val root = buildJsonObject {
-                for ((key, entry) in entries) {
-                    put(
-                        key,
-                        buildJsonObject {
-                            put("kind", entry.kind.name)
-                            put("size", entry.sizeBytes)
-                            put("at", entry.lastAccessMs)
-                        },
-                    )
-                }
-            }
             val tmp = File(dir, "manifest.json.tmp")
-            tmp.writeText(root.toString())
+            tmp.writeText(CacheJson.manifestToJson(entries))
             tmp.renameTo(manifestFile())
         } catch (e: Exception) {
             // Losing the manifest loses the index, not the data's

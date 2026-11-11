@@ -64,6 +64,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.data.mail.AllFolderSearch
+import net.sentinelsafeguard.mailapp.data.mail.SearchFilter
 import net.sentinelsafeguard.mailapp.data.mail.ComposeModel
 import net.sentinelsafeguard.mailapp.data.mail.MailRules
 import net.sentinelsafeguard.mailapp.data.mail.MailSummary
@@ -107,6 +108,10 @@ fun MessageListScreen(
     // carries the scope that actually ran, and the list says it.
     var searchAllFolders by remember { mutableStateOf(false) }
     var searchAllResult by remember { mutableStateOf<AllFolderSearch?>(null) }
+    // 1.2.2: server-side search narrowing (SearchFilter).
+    var searchFilter by remember {
+        mutableStateOf(SearchFilter.ALL)
+    }
     var expandedThreads by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pending by remember { mutableStateOf<PendingSwipe?>(null) }
     val isDrafts = MailRules.isDraftsFolder(folder)
@@ -119,12 +124,12 @@ fun MessageListScreen(
             loading = true
             try {
                 if (searchAllFolders) {
-                    val result = viewModel.searchAll(q)
+                    val result = viewModel.searchAll(q, searchFilter)
                     searchAllResult = result
                     searchResults = result.results
                 } else {
                     searchAllResult = null
-                    searchResults = viewModel.search(folder, q)
+                    searchResults = viewModel.search(folder, q, searchFilter)
                 }
             } catch (e: Exception) {
                 error = MailViewModel.friendlyError(e)
@@ -313,6 +318,38 @@ fun MessageListScreen(
                         label = { Text(stringResource(R.string.search_hint_all_folders)) },
                     )
                 }
+                // Narrowing (1.2.2): unread / starred narrow on
+                // the SERVER (flag terms in the SEARCH);
+                // attachments narrows the fetched page on its
+                // real structure flags. Picking one re-runs the
+                // current query.
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                ) {
+                    val filters = listOf(
+                        SearchFilter.ALL to
+                            R.string.search_filter_all,
+                        SearchFilter.UNREAD to
+                            R.string.search_filter_unread,
+                        SearchFilter.STARRED to
+                            R.string.search_filter_starred,
+                        SearchFilter.ATTACHMENTS to
+                            R.string.search_filter_attachments,
+                    )
+                    filters.forEach { (filter, label) ->
+                        FilterChip(
+                            selected = searchFilter == filter,
+                            onClick = {
+                                searchFilter = filter
+                                if (query.isNotBlank()) runSearch()
+                            },
+                            label = { Text(stringResource(label)) },
+                        )
+                    }
+                }
                 if (query.isBlank() && viewModel.recentSearches.isNotEmpty()) {
                     Text(
                         stringResource(R.string.recent_searches),
@@ -392,7 +429,7 @@ fun MessageListScreen(
                             // Offline: the list on screen is the
                             // encrypted cache's saved copy — labeled,
                             // with when it was saved (1.2.0).
-                            if (viewModel.offline && searchResults == null) {
+                            if (viewModel.listFromCache && searchResults == null) {
                                 item {
                                     Surface(
                                         color = SentinelSurfaceTop,

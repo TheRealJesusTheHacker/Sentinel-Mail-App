@@ -24,6 +24,7 @@ import net.sentinelsafeguard.mailapp.data.mail.MailRules
 import net.sentinelsafeguard.mailapp.data.mail.MailService
 import net.sentinelsafeguard.mailapp.data.mail.MailSummary
 import net.sentinelsafeguard.mailapp.data.mail.RecentSearches
+import net.sentinelsafeguard.mailapp.data.mail.SearchFilter
 import net.sentinelsafeguard.mailapp.data.mail.SnoozeLogic
 import net.sentinelsafeguard.mailapp.notify.NewMailWorker
 import net.sentinelsafeguard.mailapp.notify.SnoozeProcessor
@@ -59,10 +60,20 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
     var foldersError: String? by mutableStateOf(null)
         private set
 
-    /** True when the last load fell back to the offline cache —
-     * the banners key off this, and the labels say "saved copy",
-     * never pretending the data is live. */
+    /** True when the FOLDER TREE on screen is the offline
+     * cache's saved copy (set only by [loadFolders]) — the
+     * folder banner keys off this. The message list and the
+     * reader carry their own saved-copy state ([listFromCache],
+     * LoadedMessage.fromCache): before 1.2.2 this one flag was
+     * stretched over all three surfaces, so a live list could
+     * wear a "saved copy" banner — or a saved list none —
+     * depending on which load happened to fall back (D3). */
     var offline: Boolean by mutableStateOf(false)
+        private set
+
+    /** True when the message LIST on screen is the cache's
+     * saved copy (set by [loadMessages] on both paths). */
+    var listFromCache: Boolean by mutableStateOf(false)
         private set
 
     /** Correspondents harvested from this account's own mail —
@@ -155,6 +166,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         correspondents = emptyList()
         quota = null
         offline = false
+        listFromCache = false
     }
 
     // ---- engine gateway ----
@@ -210,12 +222,13 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
                 .listMessages(acc.address, acc.password, folder, forceRefresh = forceRefresh)
             cache.saveSummaries(folder, fresh)
             harvest(fresh)
+            listFromCache = false
             if (folder.equals("INBOX", ignoreCase = true)) markInboxSeen()
             fresh
         } catch (e: Exception) {
             val saved = cache.loadSummaries(folder)
             if (saved != null) {
-                offline = true
+                listFromCache = true
                 saved
             } else {
                 throw e
@@ -261,18 +274,25 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         cache.saveCorrespondents(correspondents)
     }
 
-    suspend fun search(folder: String, query: String): List<MailSummary> {
+    suspend fun search(
+        folder: String,
+        query: String,
+        filter: SearchFilter = SearchFilter.ALL,
+    ): List<MailSummary> {
         val acc = requireAccount()
-        return requireService().search(acc.address, acc.password, folder, query)
+        return requireService().search(acc.address, acc.password, folder, query, filter = filter)
     }
 
     /** All-folders search (1.2.0) over the mailbox's real folder
      * list — the offline tree when the live one isn't loaded. */
-    suspend fun searchAll(query: String): AllFolderSearch {
+    suspend fun searchAll(
+        query: String,
+        filter: SearchFilter = SearchFilter.ALL,
+    ): AllFolderSearch {
         val acc = requireAccount()
         val names = folders.map { it.name }
             .ifEmpty { cache.loadFolders()?.map { it.name } ?: listOf("INBOX") }
-        return requireService().searchAll(acc.address, acc.password, query, names)
+        return requireService().searchAll(acc.address, acc.password, query, names, filter)
     }
 
     fun recordSearch(query: String) {
@@ -298,7 +318,9 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             val saved = cache.loadMessage(folder, uid)
             if (saved != null) {
-                offline = true
+                // The LoadedMessage itself carries the saved-copy
+                // truth for the reader's banner; the folder-tree
+                // flag is not this surface's to move.
                 LoadedMessage(
                     saved,
                     fromCache = true,
@@ -469,8 +491,12 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
      */
     suspend fun snooze(folder: String, summary: MailSummary, choice: SnoozeLogic.Choice) {
         val acc = requireAccount()
+        // The fallback lookup is headers-only and READ_ONLY
+        // (1.2.2, D6): 1.2.0/1.2.1 opened the whole message
+        // READ_WRITE here, which marked it SEEN on the server
+        // and pulled its full body just to learn its ID.
         val messageId = summary.messageId
-            ?: requireService().getMessage(acc.address, acc.password, folder, summary.uid).messageId
+            ?: requireService().messageIdForUid(acc.address, acc.password, folder, summary.uid)
             ?: throw IllegalStateException(
                 "That message carries no Message-ID, so its return can't be tracked. Snooze isn't available for it."
             )
