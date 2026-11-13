@@ -1,9 +1,5 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.net.Uri
-import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,11 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -86,8 +78,12 @@ fun ComposeScreen(
     init: ComposeInit,
     onDone: () -> Unit,
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val attachCapText = stringResource(R.string.compose_attach_cap)
+    val attachReadErrorFmt = stringResource(R.string.compose_attach_read_error)
+    val badAddressFmt = stringResource(R.string.compose_error_bad_address)
+    val draftSavedText = stringResource(R.string.compose_draft_saved_long)
+    val photoNameFmt = stringResource(R.string.compose_photo_name)
     val snackbar = remember { SnackbarHostState() }
 
     val fromFolder = when (val i = init) {
@@ -154,65 +150,43 @@ fun ComposeScreen(
             model.attachments.isEmpty() && model.draftUid == null
     }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments(),
-    ) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        scope.launch {
-            var total = model.attachments.sumOf { it.bytes.size }
-            val added = mutableListOf<ComposeAttachment>()
-            for (uri in uris) {
-                try {
-                    val bytes = context.contentResolver.openInputStream(uri)
-                        ?.use { it.readBytes() } ?: continue
-                    if (total + bytes.size > MAX_ATTACHMENT_TOTAL) {
-                        error = context.getString(R.string.compose_attach_cap)
+    // Attach files (platform seam): Android's document picker /
+    // the desktop file dialog hand over name+mime+bytes; the cap
+    // and the model wiring are shared, exactly as pre-port.
+    val picker = rememberFilePicker(
+        onFiles = { picked ->
+            scope.launch {
+                var total = model.attachments.sumOf { it.bytes.size }
+                val added = mutableListOf<ComposeAttachment>()
+                for (file in picked) {
+                    if (total + file.bytes.size > MAX_ATTACHMENT_TOTAL) {
+                        error = attachCapText
                         continue
                     }
-                    var name = "attachment"
-                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        if (idx >= 0 && cursor.moveToFirst()) {
-                            cursor.getString(idx)?.takeIf { it.isNotBlank() }?.let { name = it }
-                        }
-                    }
-                    val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                    added += ComposeAttachment(name, mime, bytes)
-                    total += bytes.size
-                } catch (e: Exception) {
-                    error = context.getString(
-                        R.string.compose_attach_read_error,
-                        e.message ?: "",
-                    )
+                    added += ComposeAttachment(file.name, file.mimeType, file.bytes)
+                    total += file.bytes.size
+                }
+                if (added.isNotEmpty()) {
+                    model = model.copy(attachments = model.attachments + added)
                 }
             }
-            if (added.isNotEmpty()) {
-                model = model.copy(attachments = model.attachments + added)
-            }
-        }
-    }
+        },
+        onReadError = { message -> error = formatText(attachReadErrorFmt, message) },
+    )
 
-    // Camera attach (1.2.0): the photo lands in the app's cache
-    // attachments dir (already FileProvider-covered), is read
-    // once into the model, and is capped like any attachment.
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    val camera = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture(),
-    ) { ok ->
-        val uri = cameraUri
-        cameraUri = null
-        if (!ok || uri == null) return@rememberLauncherForActivityResult
+    // Camera attach (1.2.0) — Android only: the seam exists only
+    // where the platform has a camera (platformHasCamera); on
+    // desktop the row below is absent, not disabled.
+    val camera = rememberCameraAttach { bytes ->
         scope.launch {
             try {
-                val bytes = context.contentResolver.openInputStream(uri)
-                    ?.use { it.readBytes() } ?: return@launch
                 val total = model.attachments.sumOf { it.bytes.size }
                 if (total + bytes.size > MAX_ATTACHMENT_TOTAL) {
-                    error = context.getString(R.string.compose_attach_cap)
+                    error = attachCapText
                     return@launch
                 }
                 val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
-                val name = context.getString(R.string.compose_photo_name, stamp)
+                val name = formatText(photoNameFmt, stamp)
                 model = model.copy(
                     attachments = model.attachments +
                         ComposeAttachment(name, "image/jpeg", bytes),
@@ -223,18 +197,6 @@ fun ComposeScreen(
         }
     }
 
-    fun launchCamera() {
-        val dir = File(context.cacheDir, "attachments").apply { mkdirs() }
-        val file = File(dir, "camera-${System.currentTimeMillis()}.jpg")
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file,
-        )
-        cameraUri = uri
-        camera.launch(uri)
-    }
-
     val noRecipientText = stringResource(R.string.compose_error_no_recipient)
     fun validate(): String? {
         if (model.to.isBlank()) return noRecipientText
@@ -243,7 +205,7 @@ fun ComposeScreen(
             MailText.parseAddressList(model.bcc)
         val bad = all.firstOrNull { !MailText.looksLikeAddress(it) }
         if (bad != null) {
-            return context.getString(R.string.compose_error_bad_address, bad)
+            return formatText(badAddressFmt, bad)
         }
         return null
     }
@@ -339,9 +301,7 @@ fun ComposeScreen(
                                 try {
                                     val uid = viewModel.saveDraft(model)
                                     model = model.copy(draftUid = uid)
-                                    snackbar.showSnackbar(
-                                        context.getString(R.string.compose_draft_saved_long),
-                                    )
+                                    snackbar.showSnackbar(draftSavedText)
                                 } catch (e: Exception) {
                                     error = MailViewModel.friendlyError(e)
                                 } finally {
@@ -444,14 +404,16 @@ fun ComposeScreen(
                 }
             }
             Row {
-                OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) {
+                OutlinedButton(onClick = { picker() }) {
                     Icon(Icons.Filled.AttachFile, null, Modifier.padding(end = 6.dp))
                     Text(stringResource(R.string.compose_attach_file))
                 }
-                Spacer(Modifier.size(10.dp))
-                OutlinedButton(onClick = { launchCamera() }) {
-                    Icon(Icons.Filled.PhotoCamera, null, Modifier.padding(end = 6.dp))
-                    Text(stringResource(R.string.compose_attach_camera))
+                if (platformHasCamera()) {
+                    Spacer(Modifier.size(10.dp))
+                    OutlinedButton(onClick = { camera() }) {
+                        Icon(Icons.Filled.PhotoCamera, null, Modifier.padding(end = 6.dp))
+                        Text(stringResource(R.string.compose_attach_camera))
+                    }
                 }
             }
             if (error != null) {

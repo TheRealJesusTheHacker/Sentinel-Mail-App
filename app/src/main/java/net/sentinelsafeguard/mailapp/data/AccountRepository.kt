@@ -20,7 +20,7 @@ data class MailAccount(
  * the UI keys on "there is only one", so that work is additive.
  */
 class AccountRepository(
-    private val secureStore: SecureStore,
+    private val secureStore: SecureStoreApi,
 ) {
     fun activeAccount(): MailAccount? {
         val address = secureStore.accountAddress?.takeIf { it.isNotBlank() } ?: return null

@@ -292,4 +292,13 @@
     <string name="notif_from_others">De %1$s y otros</string>
     <string name="notif_fallback_title">Correo nuevo</string>
     <string name="notif_no_subject">(sin asunto)</string>
+    <!-- Desktop edition (1.0.0 desktop port): platform-worded copy, both locales. -->
+    <string name="lock_body_desktop">Tu correo permanece en el servidor y tu contraseña permanece en el almacenamiento protegido de esta computadora.</string>
+    <string name="settings_lock_explainer_desktop">Pedir tu PIN de la app cuando la app vuelva tras unos cinco minutos fuera.</string>
+    <string name="desktop_notifications_body">Esta edición de escritorio no publica notificaciones del sistema. Mientras la app está abierta, el correo nuevo se muestra en los conteos de no leídos de la lista de carpetas; mientras está cerrada, no se revisa nada.</string>
+    <string name="desktop_checks_note">En el escritorio, las revisiones de correo nuevo y los regresos de pospuestos se ejecutan solo mientras Sentinel Mail está abierto — nada se ejecuta mientras la app está cerrada.</string>
+    <string name="about_storage_os">Tu contraseña está protegida por el almacenamiento de claves de este sistema operativo.</string>
+    <string name="about_storage_fallback">El almacenamiento de claves del sistema no está disponible en esta máquina — las credenciales se cifran con una clave guardada en un archivo con permisos bloqueados en tu carpeta de configuración.</string>
+    <string name="settings_reduce_motion">Reducir el movimiento</string>
+    <string name="settings_reduce_motion_body">Reduce las animaciones de la app en esta computadora.</string>
 </resources>

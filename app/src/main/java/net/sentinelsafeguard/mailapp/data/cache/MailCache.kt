@@ -5,6 +5,7 @@ import androidx.security.crypto.EncryptedFile
 import androidx.security.crypto.MasterKey
 import java.io.File
 import java.nio.charset.StandardCharsets
+import net.sentinelsafeguard.mailapp.data.MailCacheApi
 import net.sentinelsafeguard.mailapp.data.mail.AddressBook
 import net.sentinelsafeguard.mailapp.data.mail.MailFolder
 import net.sentinelsafeguard.mailapp.data.mail.MailMessage
@@ -38,7 +39,7 @@ import net.sentinelsafeguard.mailapp.data.mail.MailSummary
  * IO failures degrade to "no cache" everywhere: a cache that can
  * take the app down with it is worse than no cache.
  */
-class MailCache(context: Context) {
+class MailCache(context: Context) : MailCacheApi {
 
     private val dir: File = File(context.filesDir, "mailcache").apply { mkdirs() }
     private val masterKey: MasterKey = MasterKey.Builder(context)
@@ -49,33 +50,33 @@ class MailCache(context: Context) {
 
     /** The cache is per-account. Set on sign-in / start; sign-out
      * wipes the account's records (see [clearAll]). */
-    fun bindAccount(address: String) {
+    override fun bindAccount(address: String) {
         accountKey = CachePolicy.accountKey(address)
     }
 
     // ---- folders ----
 
-    fun saveFolders(folders: List<MailFolder>) {
+    override fun saveFolders(folders: List<MailFolder>) {
         write(CachePolicy.Kind.FOLDERS, "tree", CacheJson.foldersToJson(folders))
     }
 
-    fun loadFolders(): List<MailFolder>? = CacheJson.foldersFromJson(
+    override fun loadFolders(): List<MailFolder>? = CacheJson.foldersFromJson(
         read(CachePolicy.Kind.FOLDERS, "tree"),
     )
 
     // ---- message lists ----
 
-    fun saveSummaries(folderName: String, summaries: List<MailSummary>) {
+    override fun saveSummaries(folderName: String, summaries: List<MailSummary>) {
         write(CachePolicy.Kind.SUMMARIES, "list|$folderName", CacheJson.summariesToJson(summaries))
     }
 
-    fun loadSummaries(folderName: String): List<MailSummary>? = CacheJson.summariesFromJson(
+    override fun loadSummaries(folderName: String): List<MailSummary>? = CacheJson.summariesFromJson(
         read(CachePolicy.Kind.SUMMARIES, "list|$folderName"),
     )
 
     // ---- opened messages ----
 
-    fun saveMessage(folderName: String, message: MailMessage) {
+    override fun saveMessage(folderName: String, message: MailMessage) {
         if (message.htmlBody.orEmpty().length + message.bodyText.length >
             CachePolicy.MAX_BODY_BYTES
         ) {
@@ -88,17 +89,17 @@ class MailCache(context: Context) {
         )
     }
 
-    fun loadMessage(folderName: String, uid: Long): MailMessage? = CacheJson.messageFromJson(
+    override fun loadMessage(folderName: String, uid: Long): MailMessage? = CacheJson.messageFromJson(
         read(CachePolicy.Kind.MESSAGE, "msg|$folderName|$uid"),
     )
 
     // ---- correspondents ----
 
-    fun saveCorrespondents(entries: List<AddressBook.Entry>) {
+    override fun saveCorrespondents(entries: List<AddressBook.Entry>) {
         write(CachePolicy.Kind.OTHER, "correspondents", CacheJson.correspondentsToJson(entries))
     }
 
-    fun loadCorrespondents(): List<AddressBook.Entry> = CacheJson.correspondentsFromJson(
+    override fun loadCorrespondents(): List<AddressBook.Entry> = CacheJson.correspondentsFromJson(
         read(CachePolicy.Kind.OTHER, "correspondents"),
     )
 
@@ -108,18 +109,18 @@ class MailCache(context: Context) {
      * labels; 0 when there is no record. This is the write time,
      * never the last-read time — reads touch the eviction clock
      * only (1.2.2, audit finding D2). */
-    fun savedAtMs(kind: CachePolicy.Kind, name: String): Long {
+    override fun savedAtMs(kind: CachePolicy.Kind, name: String): Long {
         val key = key(kind, name) ?: return 0L
         return manifest()[key]?.savedAtMs ?: 0L
     }
 
     /** Total bytes the cache occupies on disk (payloads only —
      * the manifest is a few hundred bytes). */
-    fun totalSizeBytes(): Long = manifest().values.sumOf { it.sizeBytes }
+    override fun totalSizeBytes(): Long = manifest().values.sumOf { it.sizeBytes }
 
     /** The Settings "Clear cache" control: everything goes.
      * Signing back in re-fetches from the server. */
-    fun clearAccount() {
+    override fun clearAccount() {
         val acct = accountKey ?: return
         for (entry in manifest().values) {
             if (entry.key.startsWith(acct)) fileFor(entry.key).delete()
@@ -128,7 +129,7 @@ class MailCache(context: Context) {
     }
 
     /** Sign-out: drop the binding and the data. */
-    fun clearAll() {
+    override fun clearAll() {
         clearAccount()
         accountKey = null
     }

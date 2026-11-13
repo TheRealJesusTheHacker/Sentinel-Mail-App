@@ -1,14 +1,6 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.content.Intent
-import android.graphics.BitmapFactory
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,14 +54,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.FileProvider
-import java.io.File
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -92,10 +78,14 @@ import net.sentinelsafeguard.mailapp.ui.theme.SentinelSurfaceTop
  * One open message. The default view is the family's audited
  * plain-text rendering — the text is the mail. "View formatted"
  * (offered only when an HTML part exists) renders that part
- * through [HtmlSanitizer] inside a locked-down WebView:
- * JavaScript off, no file or content access, remote images
- * blocked until the reader taps "Load remote images" for THIS
- * message only. Opening a message marks it read on the server.
+ * through [HtmlSanitizer] inside the platform's formatted view
+ * (the [FormattedMailView] seam): on Android a locked-down
+ * WebView — JavaScript off, no file or content access; on
+ * desktop a native Compose rendering of the same sanitized
+ * block model, there being no WebView there. Either way remote
+ * images stay blocked until the reader taps "Load remote
+ * images" for THIS message only. Opening a message marks it
+ * read on the server.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,8 +98,10 @@ fun MessageReadScreen(
     onForward: (MailMessage) -> Unit,
     onGone: () -> Unit,
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val attachmentSavedText = stringResource(R.string.attachment_saved)
+    val attachmentSaveFailedText = stringResource(R.string.attachment_save_failed)
+    val openAttachmentExternal = rememberExternalFileOpener()
     var message by remember { mutableStateOf<MailMessage?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var formatted by remember { mutableStateOf(false) }
@@ -130,20 +122,20 @@ fun MessageReadScreen(
     var preview by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
 
-    val saveLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("*/*"),
-    ) { uri ->
+    // Attachment save (platform seam): Android's document
+    // picker / the desktop save dialog hand back a writer for the
+    // chosen destination; the download + notes are shared.
+    val saveLauncher = rememberAttachmentSaveLauncher { writer ->
         val att = pendingSave
         pendingSave = null
-        if (uri == null || att == null) return@rememberLauncherForActivityResult
+        if (writer == null || att == null) return@rememberAttachmentSaveLauncher
         scope.launch {
             try {
                 val bytes = viewModel.downloadAttachment(folder, uid, att.partIndex)
-                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
-                    ?: throw IllegalStateException("No output stream.")
-                note = context.getString(R.string.attachment_saved)
+                writer(bytes)
+                note = attachmentSavedText
             } catch (e: Exception) {
-                error = context.getString(R.string.attachment_save_failed)
+                error = attachmentSaveFailedText
             }
         }
     }
@@ -503,40 +495,19 @@ fun MessageReadScreen(
                                                         // (1.2.0) — no round trip
                                                         // through another app to
                                                         // see what you were sent.
-                                                        val bitmap = BitmapFactory.decodeByteArray(
-                                                            bytes, 0, bytes.size,
-                                                        )
+                                                        val bitmap = decodeImageBitmap(bytes)
                                                         if (bitmap != null) {
-                                                            preview = bitmap.asImageBitmap()
+                                                            preview = bitmap
                                                             return@launch
                                                         }
                                                     }
-                                                    val dir = File(context.cacheDir, "attachments")
-                                                        .apply { mkdirs() }
-                                                    val safeName = att.fileName
-                                                        .replace(Regex("[^A-Za-z0-9._-]"), "_")
-                                                        .ifBlank { "attachment" }
-                                                    val file = File(dir, safeName)
-                                                    file.writeBytes(bytes)
-                                                    val uri = FileProvider.getUriForFile(
-                                                        context,
-                                                        "${context.packageName}.fileprovider",
-                                                        file,
-                                                    )
-                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                        setDataAndType(
-                                                            uri,
-                                                            att.mimeType.ifBlank { "*/*" },
-                                                        )
-                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    }
-                                                    context.startActivity(
-                                                        Intent.createChooser(
-                                                            intent,
-                                                            context.getString(
-                                                                R.string.read_open_attachment,
-                                                            ),
-                                                        ),
+                                                    // Hand the bytes to the
+                                                    // platform opener (Android:
+                                                    // FileProvider + chooser;
+                                                    // desktop: the OS default
+                                                    // app for the file).
+                                                    openAttachmentExternal(
+                                                        att.fileName, att.mimeType, bytes,
                                                     )
                                                 } catch (e: Exception) {
                                                     error = MailViewModel.friendlyError(e)
@@ -550,7 +521,7 @@ fun MessageReadScreen(
                                     }
                                     IconButton(onClick = {
                                         pendingSave = att
-                                        saveLauncher.launch(att.fileName)
+                                        saveLauncher(att.fileName)
                                     }) {
                                         Icon(
                                             Icons.Filled.Save,
@@ -647,64 +618,3 @@ private fun HeaderLine(label: String, value: String, bold: Boolean = false) {
         )
     }
 }
-
-/**
- * The one WebView in the app, and it is a cage: JavaScript
- * disabled, no file or content access, no DOM storage, no
- * zoom-driven script surface, and network images blocked unless
- * the reader asked for them for this message. The HTML it shows
- * has already passed through [HtmlSanitizer]; nothing the sender
- * wrote reaches this view unexamined.
- */
-@Composable
-private fun FormattedMailView(
-    html: String,
-    inlineParts: Map<String, InlineImages.Part>,
-    loadImages: Boolean,
-) {
-    val document = remember(html, inlineParts) {
-        // The message's own inline images are inlined FIRST (as
-        // data: URIs), then the result passes the sanitizer —
-        // the cage gets the last word, as always.
-        val body = HtmlSanitizer.sanitize(InlineImages.inlineIntoHtml(html, inlineParts))
-        """
-        <!doctype html><html><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body { background:#060806; color:#E6EDE6; font-family:sans-serif;
-                 font-size:15px; line-height:1.5; margin:0; padding:18px;
-                 word-wrap:break-word; }
-          a { color:#00E676; }
-          img { max-width:100%; height:auto; }
-          table { max-width:100%; }
-          pre { white-space:pre-wrap; }
-        </style></head><body>$body</body></html>
-        """.trimIndent()
-    }
-    AndroidView(
-        factory = { ctx ->
-            WebView(ctx).apply {
-                settings.javaScriptEnabled = false
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                settings.domStorageEnabled = false
-                settings.databaseEnabled = false
-                settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                settings.setSupportZoom(false)
-                webViewClient = WebViewClient()
-                setBackgroundColor(0xFF060806.toInt())
-            }
-        },
-        update = { view ->
-            view.settings.blockNetworkImage = !loadImages
-            view.settings.loadsImagesAutomatically = loadImages
-            view.loadDataWithBaseURL(null, document, "text/html", "UTF-8", null)
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(560.dp)
-            .background(MaterialTheme.colorScheme.background),
-    )
-}
-
-

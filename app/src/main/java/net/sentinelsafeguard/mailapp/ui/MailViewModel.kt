@@ -1,18 +1,22 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.sentinelsafeguard.mailapp.data.AccountRepository
 import net.sentinelsafeguard.mailapp.data.MailAccount
-import net.sentinelsafeguard.mailapp.data.SecureStore
-import net.sentinelsafeguard.mailapp.data.SettingsStore
+import net.sentinelsafeguard.mailapp.data.MailCacheApi
+import net.sentinelsafeguard.mailapp.data.SecureStoreApi
+import net.sentinelsafeguard.mailapp.data.SettingsStoreApi
 import net.sentinelsafeguard.mailapp.data.cache.CachePolicy
-import net.sentinelsafeguard.mailapp.data.cache.MailCache
 import net.sentinelsafeguard.mailapp.data.mail.AddressBook
 import net.sentinelsafeguard.mailapp.data.mail.AllFolderSearch
 import net.sentinelsafeguard.mailapp.data.mail.ComposeModel
@@ -26,7 +30,6 @@ import net.sentinelsafeguard.mailapp.data.mail.MailSummary
 import net.sentinelsafeguard.mailapp.data.mail.RecentSearches
 import net.sentinelsafeguard.mailapp.data.mail.SearchFilter
 import net.sentinelsafeguard.mailapp.data.mail.SnoozeLogic
-import net.sentinelsafeguard.mailapp.notify.NewMailWorker
 import net.sentinelsafeguard.mailapp.notify.SnoozeProcessor
 
 /**
@@ -35,15 +38,33 @@ import net.sentinelsafeguard.mailapp.notify.SnoozeProcessor
  * multi-account seam) and a [MailService] built for it, so no
  * screen ever touches a store or a password directly.
  */
-class MailViewModel(application: Application) : AndroidViewModel(application) {
-
-    val secureStore = SecureStore(application)
-    val settingsStore = SettingsStore(application)
-    private val accounts = AccountRepository(secureStore)
-
+class MailViewModel(
+    val secureStore: SecureStoreApi,
+    val settingsStore: SettingsStoreApi,
     /** The 1.2.0 encrypted offline cache. Bound to the account
      * whenever one is active; wiped on sign-out. */
-    val cache = MailCache(application)
+    val cache: MailCacheApi,
+    /** Platform sign-out hook: Android cancels the periodic
+     * WorkManager check; desktop has no background worker to
+     * cancel (its checker is the in-process loop below). */
+    private val onSignOutPlatform: () -> Unit = {},
+) {
+
+    private val accounts = AccountRepository(secureStore)
+
+    /** The view model's own main scope (desktop port seam,
+     * 2026-11-13: this class was an AndroidViewModel; it is now a
+     * plain class both platforms construct with their own stores —
+     * Android retains it via MailViewModelHolder, exactly the
+     * Academy port's shape. Dispatchers.Main is the Android main
+     * dispatcher on the phone and the Swing dispatcher on
+     * desktop; viewModelScope used Main.immediate likewise.) */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Release the scope (holder onCleared / desktop dispose). */
+    fun close() {
+        scope.cancel()
+    }
 
     private var service: MailService? = null
 
@@ -98,8 +119,8 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
             cache.bindAccount(account!!.address)
             correspondents = cache.loadCorrespondents()
             // Snoozed mail also returns when the app opens.
-            viewModelScope.launch {
-                runCatching { SnoozeProcessor.processDue(getApplication()) }
+            scope.launch {
+                runCatching { SnoozeProcessor.processDue(secureStore, settingsStore) }
             }
             loadQuota()
         }
@@ -132,7 +153,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         smtpPort: Int?,
         onResult: (String?) -> Unit,
     ) {
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val config = net.sentinelsafeguard.mailapp.config.MailConfig.production(
                     host?.takeIf { it.isNotBlank() } ?: "mail.sentinelsafeguard.net",
@@ -159,7 +180,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         cache.clearAll()
         accounts.signOut()
         settingsStore.clear()
-        NewMailWorker.cancel(getApplication())
+        onSignOutPlatform()
         account = null
         service = null
         folders = emptyList()
@@ -181,7 +202,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         val acc = account ?: return
         foldersLoading = true
         foldersError = null
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val fresh = requireService().listFolders(acc.address, acc.password)
                 folders = fresh
@@ -251,7 +272,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun markInboxSeen() {
         val acc = account ?: return
-        viewModelScope.launch {
+        scope.launch {
             runCatching {
                 val (validity, maxUid) = requireService()
                     .inboxState(acc.address, acc.password)
@@ -413,7 +434,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
     fun createFolder(name: String, onResult: (String?) -> Unit) {
         val acc = account ?: return onResult("Not signed in.")
         MailRules.validateFolderName(name)?.let { return onResult(nameProblemText(it)) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 requireService().createFolder(acc.address, acc.password, name.trim())
                 loadFolders()
@@ -439,7 +460,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         val parent = folder.name.substringBeforeLast(delimiter, "")
         val target = if (parent.isEmpty()) newLeaf.trim()
         else parent + delimiter + newLeaf.trim()
-        viewModelScope.launch {
+        scope.launch {
             try {
                 requireService().renameFolder(acc.address, acc.password, folder.name, target)
                 loadFolders()
@@ -459,7 +480,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
         ) {
             return onResult(blockedSpecialText)
         }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 requireService().deleteFolder(acc.address, acc.password, folder.name)
                 loadFolders()
@@ -474,7 +495,7 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadQuota() {
         val acc = account ?: return
-        viewModelScope.launch {
+        scope.launch {
             quota = runCatching {
                 requireService().quota(acc.address, acc.password)
             }.getOrNull()
@@ -517,10 +538,60 @@ class MailViewModel(application: Application) : AndroidViewModel(application) {
     /** Process any due snooze returns now (also runs on the
      * periodic checker's tick). */
     fun processSnoozes(onDone: () -> Unit = {}) {
-        viewModelScope.launch {
-            runCatching { SnoozeProcessor.processDue(getApplication()) }
+        scope.launch {
+            runCatching { SnoozeProcessor.processDue(secureStore, settingsStore) }
             loadFolders()
             onDone()
+        }
+    }
+
+    // ---- desktop running checker (desktop port, 2026-11-13) ----
+
+    private var runningChecker: Job? = null
+
+    /**
+     * DESKTOP ONLY — never called on Android, where the periodic
+     * WorkManager check owns this job. While the desktop app is
+     * RUNNING, poll on the user's chosen interval: the same
+     * baseline discipline as the worker (first sight and
+     * UIDVALIDITY changes re-baseline silently; nothing here posts
+     * system notifications — new mail surfaces in-app as refreshed
+     * folder unread counts). Due snooze returns ride the same
+     * tick, as they do on the worker. When the app is closed
+     * nothing runs and nothing claims otherwise; a manual-only
+     * interval (0) polls nothing.
+     */
+    fun startRunningChecker() {
+        if (runningChecker != null) return
+        runningChecker = scope.launch {
+            while (isActive) {
+                val minutes = settingsStore.checkIntervalMinutes
+                delay(if (minutes > 0) minutes * 60_000L else 60_000L)
+                val acc = account ?: continue
+                if (minutes <= 0 || locked) continue
+                runCatching { SnoozeProcessor.processDue(secureStore, settingsStore) }
+                runCatching {
+                    val (validity, maxUid) = requireService()
+                        .inboxState(acc.address, acc.password)
+                    when {
+                        validity != settingsStore.lastSeenInboxUidValidity -> {
+                            settingsStore.lastSeenInboxUidValidity = validity
+                            settingsStore.lastSeenInboxUid = maxUid
+                        }
+                        maxUid > settingsStore.lastSeenInboxUid -> {
+                            settingsStore.lastSeenInboxUid = maxUid
+                            // New mail: refresh the tree quietly so
+                            // unread counts on screen are the
+                            // surfacing (no loading spinner).
+                            val fresh = requireService()
+                                .listFolders(acc.address, acc.password)
+                            folders = fresh
+                            offline = false
+                            cache.saveFolders(fresh)
+                        }
+                    }
+                }
+            }
         }
     }
 

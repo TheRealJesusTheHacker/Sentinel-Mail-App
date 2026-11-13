@@ -52,6 +52,7 @@ fun AppRoot(
     deepLinkNonce: Int,
     onDeepLinkConsumed: () -> Unit,
 ) {
+    PlatformLifecycleEffects(viewModel)
     if (viewModel.account == null) {
         SignInScreen(viewModel)
         return

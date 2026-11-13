@@ -1,10 +1,5 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -57,11 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.data.mail.MailFolder
@@ -95,7 +87,6 @@ fun FolderListScreen(
     onSettings: () -> Unit,
 ) {
     val tick = rememberHapticTick()
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     val settings = viewModel.settingsStore
@@ -104,22 +95,8 @@ fun FolderListScreen(
     var dialogText by remember { mutableStateOf("") }
     var dialogError by remember { mutableStateOf<String?>(null) }
 
-    // ---- notification permission (the family's pattern) ----
-    var explainerOpen by remember { mutableStateOf(false) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { settings.notificationPermissionAsked = true }
     LaunchedEffect(Unit) {
         if (viewModel.folders.isEmpty()) viewModel.loadFolders()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            settings.notificationsEnabled &&
-            !settings.notificationPermissionAsked &&
-            ContextCompat.checkSelfPermission(
-                context, Manifest.permission.POST_NOTIFICATIONS,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            explainerOpen = true
-        }
     }
 
     Scaffold(
@@ -288,31 +265,8 @@ fun FolderListScreen(
         }
     }
 
-    // ---- notification explainer dialog ----
-    if (explainerOpen) {
-        AlertDialog(
-            onDismissRequest = {
-                explainerOpen = false
-                settings.notificationPermissionAsked = true
-            },
-            title = { Text(stringResource(R.string.notify_explainer_title)) },
-            text = { Text(stringResource(R.string.notify_explainer_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    explainerOpen = false
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }) { Text(stringResource(R.string.notify_explainer_allow)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    explainerOpen = false
-                    settings.notificationPermissionAsked = true
-                }) { Text(stringResource(R.string.notify_explainer_not_now)) }
-            },
-        )
-    }
+    // ---- notification permission explainer (platform seam) ----
+    PlatformNotificationExplainer(viewModel)
 
     // ---- folder dialogs ----
     when (val d = dialog) {

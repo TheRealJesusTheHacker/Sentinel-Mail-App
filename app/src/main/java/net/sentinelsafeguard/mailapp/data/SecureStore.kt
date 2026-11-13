@@ -17,7 +17,7 @@ import java.security.MessageDigest
  *
  * The PIN itself is never stored — only a salted SHA-256 verifier.
  */
-class SecureStore(context: Context) {
+class SecureStore(context: Context) : SecureStoreApi {
 
     private val prefs: SharedPreferences = run {
         val masterKey = MasterKey.Builder(context)
@@ -32,33 +32,33 @@ class SecureStore(context: Context) {
         )
     }
 
-    var accountAddress: String?
+    override var accountAddress: String?
         get() = prefs.getString(KEY_ACCOUNT_ADDRESS, null)
         set(value) = putOrRemove(KEY_ACCOUNT_ADDRESS, value)
 
-    var mailPassword: String?
+    override var mailPassword: String?
         get() = prefs.getString(KEY_MAIL_PASSWORD, null)
         set(value) = putOrRemove(KEY_MAIL_PASSWORD, value)
 
     /** Advanced server overrides (blank = the verified defaults). */
-    var serverHost: String?
+    override var serverHost: String?
         get() = prefs.getString(KEY_SERVER_HOST, null)
         set(value) = putOrRemove(KEY_SERVER_HOST, value)
 
-    var imapPort: Int
+    override var imapPort: Int
         get() = prefs.getInt(KEY_IMAP_PORT, 0)
         set(value) = prefs.edit().putInt(KEY_IMAP_PORT, value).apply()
 
-    var smtpPort: Int
+    override var smtpPort: Int
         get() = prefs.getInt(KEY_SMTP_PORT, 0)
         set(value) = prefs.edit().putInt(KEY_SMTP_PORT, value).apply()
 
-    val hasAccount: Boolean
+    override val hasAccount: Boolean
         get() = !accountAddress.isNullOrBlank() && !mailPassword.isNullOrBlank()
 
     // ---- app lock PIN (verifier only) ----
 
-    fun setPin(pin: String) {
+    override fun setPin(pin: String) {
         val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
         val saltB64 = android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)
         prefs.edit()
@@ -67,7 +67,7 @@ class SecureStore(context: Context) {
             .apply()
     }
 
-    fun checkPin(pin: String): Boolean {
+    override fun checkPin(pin: String): Boolean {
         val saltB64 = prefs.getString(KEY_PIN_SALT, null) ?: return false
         val expected = prefs.getString(KEY_PIN_VERIFIER, null) ?: return false
         val salt = android.util.Base64.decode(saltB64, android.util.Base64.NO_WRAP)
@@ -77,9 +77,9 @@ class SecureStore(context: Context) {
         )
     }
 
-    val hasPin: Boolean get() = prefs.contains(KEY_PIN_VERIFIER)
+    override val hasPin: Boolean get() = prefs.contains(KEY_PIN_VERIFIER)
 
-    fun clearPin() {
+    override fun clearPin() {
         prefs.edit().remove(KEY_PIN_SALT).remove(KEY_PIN_VERIFIER).apply()
     }
 
@@ -93,7 +93,7 @@ class SecureStore(context: Context) {
     }
 
     /** Sign-out wipes every secret this store holds. */
-    fun clearAll() {
+    override fun clearAll() {
         prefs.edit().clear().apply()
     }
 

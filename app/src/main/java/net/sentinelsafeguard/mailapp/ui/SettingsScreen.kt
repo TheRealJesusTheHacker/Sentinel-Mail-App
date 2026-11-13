@@ -1,10 +1,5 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -45,17 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import net.sentinelsafeguard.mailapp.BuildConfig
 import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.data.mail.MailText
-import net.sentinelsafeguard.mailapp.notify.NewMailWorker
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
 /**
@@ -70,9 +59,14 @@ fun SettingsScreen(
     viewModel: MailViewModel,
     onBack: () -> Unit,
 ) {
-    val context = LocalContext.current
     val settings = viewModel.settingsStore
     val secure = viewModel.secureStore
+    val checkScheduler = rememberCheckScheduler()
+    val signatureSavedText = stringResource(R.string.settings_signature_saved)
+    val cacheClearedText = stringResource(R.string.settings_cache_cleared)
+    val pinRemovedLockNote = stringResource(R.string.settings_pin_removed_lock_note)
+    val pinRemovedNote = stringResource(R.string.settings_pin_removed_note)
+    val pinSetNote = stringResource(R.string.settings_pin_set_note)
 
     var interval by remember { mutableStateOf(settings.checkIntervalMinutes) }
     var lockEnabled by remember { mutableStateOf(settings.appLockEnabled) }
@@ -82,21 +76,6 @@ fun SettingsScreen(
     var note by remember { mutableStateOf<String?>(null) }
     // 1.2.0 additions: notifications, undo-send window,
     // signatures, the offline cache, and mailbox quota.
-    var notificationsOn by remember { mutableStateOf(settings.notificationsEnabled) }
-    var permissionGranted by remember {
-        mutableStateOf(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.POST_NOTIFICATIONS,
-                ) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        permissionGranted = granted
-        settings.notificationPermissionAsked = true
-    }
     var undoSeconds by remember { mutableStateOf(settings.undoSendSeconds) }
     var sigPersonal by remember { mutableStateOf(settings.signaturePersonal) }
     var sigShared by remember { mutableStateOf(settings.signatureShared) }
@@ -164,47 +143,7 @@ fun SettingsScreen(
                 )
             }
             Divider()
-            Text(stringResource(R.string.settings_notifications), style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(6.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(
-                            if (notificationsOn) R.string.settings_notifications_on
-                            else R.string.settings_notifications_off,
-                        ),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        stringResource(R.string.settings_notifications_explainer),
-                        color = SentinelMuted,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                Switch(
-                    checked = notificationsOn,
-                    onCheckedChange = { on ->
-                        notificationsOn = on
-                        settings.notificationsEnabled = on
-                    },
-                )
-            }
-            if (notificationsOn && !permissionGranted) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    stringResource(R.string.settings_permission_missing),
-                    color = SentinelMuted,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                TextButton(onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }) { Text(stringResource(R.string.settings_permission_grant)) }
-            }
+            PlatformNotificationsSection(viewModel)
             Divider()
             Text(stringResource(R.string.settings_checks), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
@@ -227,7 +166,7 @@ fun SettingsScreen(
                 val select = {
                     interval = minutes
                     settings.checkIntervalMinutes = minutes
-                    NewMailWorker.reschedule(context)
+                    checkScheduler()
                 }
                 Row(
                     Modifier
@@ -299,7 +238,7 @@ fun SettingsScreen(
                 onClick = {
                     settings.signaturePersonal = sigPersonal
                     settings.signatureShared = sigShared
-                    note = context.getString(R.string.settings_signature_saved)
+                    note = signatureSavedText
                 },
                 modifier = Modifier.padding(top = 8.dp),
             ) { Text(stringResource(R.string.save)) }
@@ -322,7 +261,7 @@ fun SettingsScreen(
                 onClick = {
                     viewModel.cache.clearAccount()
                     cacheBytes = 0L
-                    note = context.getString(R.string.settings_cache_cleared)
+                    note = cacheClearedText
                 },
                 modifier = Modifier.padding(top = 8.dp),
             ) { Text(stringResource(R.string.settings_cache_clear)) }
@@ -336,7 +275,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_lock_line), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        stringResource(R.string.settings_lock_explainer),
+                        stringResource(lockExplainerRes()),
                         color = SentinelMuted,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -378,9 +317,9 @@ fun SettingsScreen(
                     if (lockEnabled) {
                         lockEnabled = false
                         settings.appLockEnabled = false
-                        note = context.getString(R.string.settings_pin_removed_lock_note)
+                        note = pinRemovedLockNote
                     } else {
-                        note = context.getString(R.string.settings_pin_removed_note)
+                        note = pinRemovedNote
                     }
                 }) { Text(stringResource(R.string.settings_pin_remove)) }
             }
@@ -418,8 +357,8 @@ fun SettingsScreen(
             Text(
                 stringResource(
                     R.string.settings_about_version,
-                    BuildConfig.VERSION_NAME,
-                    BuildConfig.VERSION_CODE,
+                    appVersionName(),
+                    appVersionCode(),
                 ),
                 style = MaterialTheme.typography.bodyLarge,
             )
@@ -438,6 +377,7 @@ fun SettingsScreen(
                 color = SentinelMuted,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            PlatformExtraSettings()
             Spacer(Modifier.height(28.dp))
         }
     }
@@ -449,7 +389,7 @@ fun SettingsScreen(
                 secure.setPin(pin)
                 hasPin = true
                 pinDialog = false
-                note = context.getString(R.string.settings_pin_set_note)
+                note = pinSetNote
                 if (pendingLockAfterPin) {
                     lockEnabled = true
                     settings.appLockEnabled = true

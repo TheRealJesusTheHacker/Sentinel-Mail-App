@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Sentinel Mail
+Comment=Sentinel Mail — your Sentinel Safeguard mailbox, TLS-pinned, on the desktop
+Exec=/opt/sentinel-mail/bin/Sentinel Mail
+Icon=/opt/sentinel-mail/lib/Sentinel Mail.png
+Terminal=false
+Type=Application
+Categories=Network;Email;

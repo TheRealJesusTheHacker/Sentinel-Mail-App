@@ -92,7 +92,7 @@ class NewMailWorker(
             // checker's cadence is the return cadence, disclosed
             // as approximate in the snooze dialog itself. Its own
             // failure never fails the check.
-            runCatching { SnoozeProcessor.processDue(applicationContext) }
+            runCatching { SnoozeProcessor.processDue(secure, settings) }
             Result.success()
         } catch (e: Exception) {
             // A failed check is a quiet retry later, never a

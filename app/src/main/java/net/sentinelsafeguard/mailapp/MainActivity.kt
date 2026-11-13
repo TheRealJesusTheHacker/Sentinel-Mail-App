@@ -12,11 +12,13 @@ import androidx.fragment.app.FragmentActivity
 import net.sentinelsafeguard.mailapp.notify.Notifier
 import net.sentinelsafeguard.mailapp.ui.AppRoot
 import net.sentinelsafeguard.mailapp.ui.MailViewModel
+import net.sentinelsafeguard.mailapp.ui.MailViewModelHolder
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelTheme
 
 class MainActivity : FragmentActivity() {
 
-    private val viewModel: MailViewModel by viewModels()
+    private val holder: MailViewModelHolder by viewModels()
+    private val viewModel: MailViewModel get() = holder.vm
     private var backgroundedAtMillis: Long = 0L
 
     // A notification tap's destination: folder + message UID, plus

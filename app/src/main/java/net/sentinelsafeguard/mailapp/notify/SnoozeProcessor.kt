@@ -1,9 +1,8 @@
 package net.sentinelsafeguard.mailapp.notify
 
-import android.content.Context
 import net.sentinelsafeguard.mailapp.data.AccountRepository
-import net.sentinelsafeguard.mailapp.data.SecureStore
-import net.sentinelsafeguard.mailapp.data.SettingsStore
+import net.sentinelsafeguard.mailapp.data.SecureStoreApi
+import net.sentinelsafeguard.mailapp.data.SettingsStoreApi
 import net.sentinelsafeguard.mailapp.data.mail.MailRules
 import net.sentinelsafeguard.mailapp.data.mail.SnoozeLogic
 
@@ -25,10 +24,12 @@ import net.sentinelsafeguard.mailapp.data.mail.SnoozeLogic
  */
 object SnoozeProcessor {
 
-    /** Returns how many messages were moved back. */
-    suspend fun processDue(context: Context): Int {
-        val secure = SecureStore(context)
-        val settings = SettingsStore(context)
+    /** Returns how many messages were moved back. The stores are
+     * passed in (desktop port seam, 2026-11-13): on Android the
+     * worker and the view model hand over the same store instances
+     * they already hold; on desktop the desktop stores ride in —
+     * the return logic itself is platform-free. */
+    suspend fun processDue(secure: SecureStoreApi, settings: SettingsStoreApi): Int {
         val repo = AccountRepository(secure)
         val account = repo.activeAccount() ?: return 0
         val records = SnoozeLogic.decode(settings.snoozeRecordsEncoded)

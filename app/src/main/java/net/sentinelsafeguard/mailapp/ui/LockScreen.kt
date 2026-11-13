@@ -1,8 +1,5 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.os.Build
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -25,14 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
-import androidx.compose.ui.res.stringResource
 import net.sentinelsafeguard.mailapp.R
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
 
@@ -42,65 +33,18 @@ import net.sentinelsafeguard.mailapp.ui.theme.SentinelMuted
  * when one is set. The mailbox itself is never at risk from this
  * screen — the password stays in the Keystore store whatever
  * happens here.
+ *
+ * Desktop port (2026-11-13): the biometric half is the
+ * [PlatformBiometricButton] seam — on desktop it renders nothing
+ * and the lock is PIN only. The body copy names the platform's
+ * own storage via [lockBodyRes].
  */
 @Composable
 fun LockScreen(viewModel: MailViewModel) {
-    val context = LocalContext.current
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val hasPin = viewModel.secureStore.hasPin
-
-    fun tryBiometric() {
-        val activity = context as? FragmentActivity ?: return
-        val manager = BiometricManager.from(context)
-        val authenticators = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        } else {
-            BiometricManager.Authenticators.BIOMETRIC_WEAK
-        }
-        if (manager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
-            if (!hasPin) {
-                // No biometric and no PIN: the honest fallback is
-                // the device credential prompt is unavailable, so
-                // let the PIN-less owner in rather than bricking
-                // the mailbox behind a lock with no key. (Lock
-                // setup steers owners to set a PIN for this case.)
-                viewModel.unlock()
-            } else {
-                error = context.getString(R.string.lock_biometric_unavailable)
-            }
-            return
-        }
-        val prompt = BiometricPrompt(
-            activity,
-            ContextCompat.getMainExecutor(context),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    viewModel.unlock()
-                }
-
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
-                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
-                    ) {
-                        error = errString.toString()
-                    }
-                }
-            },
-        )
-        val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(context.getString(R.string.lock_title))
-            .setSubtitle(context.getString(R.string.lock_subtitle))
-            .setAllowedAuthenticators(authenticators)
-            .apply {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                    setNegativeButtonText(context.getString(R.string.lock_use_pin))
-                }
-            }
-            .build()
-        prompt.authenticate(info)
-    }
+    val pinMismatchText = stringResource(R.string.lock_pin_mismatch)
 
     Column(
         Modifier
@@ -118,15 +62,14 @@ fun LockScreen(viewModel: MailViewModel) {
         Text(stringResource(R.string.lock_title), style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            stringResource(R.string.lock_body),
+            stringResource(lockBodyRes()),
             color = SentinelMuted,
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = { tryBiometric() },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.lock_unlock_biometrics)) }
+        // Biometrics / device credential on Android; on desktop
+        // this seam renders nothing — the lock there is PIN only.
+        PlatformBiometricButton(viewModel, hasPin) { error = it }
         if (hasPin) {
             Spacer(Modifier.height(20.dp))
             OutlinedTextField(
@@ -148,7 +91,7 @@ fun LockScreen(viewModel: MailViewModel) {
                     if (viewModel.secureStore.checkPin(pin)) {
                         viewModel.unlock()
                     } else {
-                        error = context.getString(R.string.lock_pin_mismatch)
+                        error = pinMismatchText
                     }
                 },
                 enabled = pin.isNotEmpty(),

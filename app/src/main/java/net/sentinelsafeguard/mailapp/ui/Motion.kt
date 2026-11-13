@@ -1,8 +1,5 @@
 package net.sentinelsafeguard.mailapp.ui
 
-import android.os.Build
-import android.provider.Settings
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -16,8 +13,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import net.sentinelsafeguard.mailapp.ui.theme.SentinelGreen
@@ -29,75 +24,13 @@ import net.sentinelsafeguard.mailapp.ui.theme.SentinelGreen
  * pieces, and the family haptics. The pure numbers live in
  * [MotionLogic]; this file only renders them.
  *
- * Every pattern honors the system animator setting (reduced
- * motion) through [rememberReducedMotion] — the same
- * Settings.Global check the family has always used. A pattern
- * with no reduced-motion fallback does not ship.
+ * Every pattern honors reduced motion through
+ * [rememberReducedMotion] — a platform seam (Platform.kt): the
+ * system animator setting on Android, the app's own Reduce
+ * motion setting on desktop. A pattern with no reduced-motion
+ * fallback does not ship. The haptic seams live in Platform.kt
+ * too (desktop has no haptics and returns no-ops).
  */
-
-/**
- * True when the system animator duration scale is 0 — the
- * device's reduced-motion setting. Read once per composition
- * that asks. Every motion pattern in this file consults it.
- */
-@Composable
-fun rememberReducedMotion(): Boolean {
-    val context = LocalContext.current
-    return remember {
-        try {
-            Settings.Global.getFloat(
-                context.contentResolver,
-                Settings.Global.ANIMATOR_DURATION_SCALE,
-                1f,
-            ) == 0f
-        } catch (e: Exception) {
-            false
-        }
-    }
-}
-
-/**
- * The family haptic tick: one light keyboard-tap tick on
- * navigation and picks — the surfaces the owner moves by feel.
- * Never on passive rendering. Haptics are garnish: a device
- * without a vibrator path must never break the interaction.
- */
-@Composable
-fun rememberHapticTick(): () -> Unit {
-    val view = LocalView.current
-    return remember(view) {
-        {
-            try {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            } catch (ignored: Exception) {
-                // Garnish only — never break the action.
-            }
-        }
-    }
-}
-
-/**
- * The primary-action haptic: a confirming thock for a send,
- * stronger than the light navigation tick. CONFIRM on API 30+,
- * LONG_PRESS below it, always guarded.
- */
-@Composable
-fun rememberPrimaryHaptic(): () -> Unit {
-    val view = LocalView.current
-    return remember(view) {
-        {
-            try {
-                if (Build.VERSION.SDK_INT >= 30) {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                } else {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                }
-            } catch (ignored: Exception) {
-                // Garnish only — never break the action.
-            }
-        }
-    }
-}
 
 /**
  * M-09 list entrance for the row at [index]: a short fade +

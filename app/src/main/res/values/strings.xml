@@ -293,4 +293,13 @@
     <string name="notif_from_others">From %1$s and others</string>
     <string name="notif_fallback_title">New mail</string>
     <string name="notif_no_subject">(no subject)</string>
+    <!-- Desktop edition (1.0.0 desktop port): platform-worded copy, both locales. -->
+    <string name="lock_body_desktop">Your mail stays on the server and your password stays in this computer\'s protected storage.</string>
+    <string name="settings_lock_explainer_desktop">Ask for your app PIN when the app comes back after about five minutes away.</string>
+    <string name="desktop_notifications_body">This desktop edition does not post system notifications. While the app is open, new mail shows in the folder list\'s unread counts; while it is closed, nothing is checked.</string>
+    <string name="desktop_checks_note">On desktop, new-mail checks and snooze returns run only while Sentinel Mail is open — nothing runs while the app is closed.</string>
+    <string name="about_storage_os">Your account password is protected by this operating system\'s key storage.</string>
+    <string name="about_storage_fallback">OS key storage is unavailable on this machine — credentials are encrypted with a key stored in a permissions-locked file in your config folder.</string>
+    <string name="settings_reduce_motion">Reduce motion</string>
+    <string name="settings_reduce_motion_body">Calms the app\'s animations on this computer.</string>
 </resources>
