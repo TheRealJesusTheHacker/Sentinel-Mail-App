@@ -1,0 +1,81 @@
+# Publish Release Asset — attach a hosted binary to a GitHub Release.
+#
+# Why this exists: release-asset uploads from outside Actions are not
+# available to the fleet credential (the uploads host rejects it) and
+# the browser route caps file size, so assets are attached from INSIDE
+# Actions: this workflow downloads the finished binary from the public
+# mirror (https://sentinelsafeguard.net/static/downloads/) and uploads
+# it to the release with the workflow's own GITHUB_TOKEN.
+#
+# Signing stays on the custody VM — this workflow never signs anything.
+# It only publishes binaries that were already signed, hosted, and
+# pull-verified through the normal ship route.
+#
+# HOW FUTURE BUILDS ATTACH:
+# - Android (signed on the custody VM, then hosted on the mirror):
+#   dispatch this workflow after the signed/hosted ship completes,
+#   with the version's tag/title and asset = the hosted file name.
+# - Desktop (the desktop build workflows produce the installers):
+#   after an installer is hosted on the mirror, dispatch this workflow
+#   the same way — the publisher fetches the binary from the mirror
+#   by name and attaches it to the release.
+#
+# Inputs: tag, title, asset (a file name under the mirror's
+# downloads/), notes (optional; used only when the release has to be
+# created — an existing release keeps its own notes).
+
+name: Publish Release Asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.2.2 or desktop-v1.0.0)"
+        required: true
+        type: string
+      title:
+        description: "Release title (used only when creating the release)"
+        required: true
+        type: string
+      asset:
+        description: "File name under https://sentinelsafeguard.net/static/downloads/"
+        required: true
+        type: string
+      notes:
+        description: "Release notes (optional; used only when creating the release)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download asset from the mirror
+        env:
+          ASSET: ${{ inputs.asset }}
+        run: |
+          set -euo pipefail
+          curl -fSL --retry 3 --retry-delay 5 -o "$ASSET" "https://sentinelsafeguard.net/static/downloads/$ASSET"
+          ls -l "$ASSET"
+          echo "sha256: $(sha256sum "$ASSET" | cut -d' ' -f1)"
+
+      - name: Create the release if needed, then upload the asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.title }}
+          NOTES: ${{ inputs.notes }}
+          ASSET: ${{ inputs.asset }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists - uploading asset only."
+          else
+            gh release create "$TAG" --title "$TITLE" --notes "$NOTES"
+          fi
+          gh release upload "$TAG" "$ASSET" --clobber
