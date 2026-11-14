@@ -4,11 +4,13 @@
 # installer on a GitHub-hosted Windows runner and uploads it as a
 # workflow artifact. Nothing is published or released by this workflow.
 #
-# ASSUMPTION: the desktop module is named `desktop` and exposes the
-# standard Compose Desktop packaging task `:desktop:packageReleaseExe`
-# (Compose Multiplatform Gradle plugin; output lands in
-# desktop/build/compose/binaries/main-release/exe/). If the module is
-# renamed, update the task path below to match.
+# LANDED SHAPE: the desktop edition is a STANDALONE Gradle build
+# rooted at `desktop/` in this repo (its own settings.gradle.kts +
+# gradlew; deliberately not a module of the Android root build, so
+# the Android build's verification metadata stays byte-identical).
+# The packaging task therefore runs FROM the desktop/ directory
+# with no module prefix: `packageReleaseExe` (output lands in
+# desktop/build/compose/binaries/main-release/exe/).
 #
 # GitHub's windows-latest runner images ship the WiX Toolset v3, which
 # jpackage (under the Compose Desktop packaging tasks) needs to build
@@ -43,7 +45,8 @@ jobs:
 
       - name: Build the Windows EXE installer (Compose Desktop)
         shell: pwsh
-        run: .\gradlew.bat :desktop:packageReleaseExe --stacktrace
+        working-directory: desktop
+        run: .\gradlew.bat packageReleaseExe --stacktrace
 
       - name: Show the produced installer
         shell: pwsh
