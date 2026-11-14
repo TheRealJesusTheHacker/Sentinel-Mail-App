@@ -36,11 +36,11 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
+      - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "17"
           cache: gradle
 
       - name: Build the Windows EXE installer (Compose Desktop)
