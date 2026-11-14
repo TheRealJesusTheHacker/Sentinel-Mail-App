@@ -190,7 +190,7 @@ compose.desktop {
     application {
         mainClass = "net.sentinelsafeguard.mailapp.desktop.MainKt"
         nativeDistributions {
-            targetFormats(TargetFormat.Deb, TargetFormat.Msi)
+            targetFormats(TargetFormat.Deb, TargetFormat.Exe)
             packageName = "sentinel-mail"
             packageVersion = "1.0.0"
             description = "Sentinel Mail — direct IMAP/SMTP mail client for Sentinel Mail, from Sentinel Safeguard"
