@@ -1,0 +1,57 @@
+# Sentinel Mail App — Windows desktop edition (.exe installer)
+#
+# Builds the Compose Multiplatform desktop target into a Windows EXE
+# installer on a GitHub-hosted Windows runner and uploads it as a
+# workflow artifact. Nothing is published or released by this workflow.
+#
+# ASSUMPTION: the desktop module is named `desktop` and exposes the
+# standard Compose Desktop packaging task `:desktop:packageReleaseExe`
+# (Compose Multiplatform Gradle plugin; output lands in
+# desktop/build/compose/binaries/main-release/exe/). If the module is
+# renamed, update the task path below to match.
+#
+# GitHub's windows-latest runner images ship the WiX Toolset v3, which
+# jpackage (under the Compose Desktop packaging tasks) needs to build
+# the Exe installer format.
+
+name: Desktop Windows (EXE)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-exe:
+    name: Build Windows EXE installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Build the Windows EXE installer (Compose Desktop)
+        shell: pwsh
+        run: .\gradlew.bat :desktop:packageReleaseExe --stacktrace
+
+      - name: Show the produced installer
+        shell: pwsh
+        run: Get-ChildItem -Recurse desktop/build/compose/binaries/main-release/exe
+
+      - name: Upload the EXE installer as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sentinel-Mail-Desktop-Windows
+          path: desktop/build/compose/binaries/main-release/exe/*.exe
+          if-no-files-found: error
