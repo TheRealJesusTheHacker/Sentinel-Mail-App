@@ -1,0 +1,56 @@
+name: Desktop Release 1.0.0
+
+# Publishes the Desktop 1.0.0 packages to a GitHub Release.
+# Downloads the verified packages from sentinelsafeguard.net, checks their
+# SHA-256 in the runner (the run fails on any mismatch), then creates the
+# desktop-v1.0.0 release if it does not exist yet and uploads both assets.
+# Uses only the built-in GITHUB_TOKEN. Contains no secrets.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop-release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: desktop-v1.0.0
+    steps:
+      - name: Download desktop packages
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cd dist
+          curl -fL --retry 3 -O "https://sentinelsafeguard.net/static/downloads/Sentinel-Mail-Desktop-1.0.0.deb"
+          curl -fL --retry 3 -O "https://sentinelsafeguard.net/static/downloads/Sentinel-Mail-Desktop-1.0.0.exe"
+      - name: Verify SHA-256
+        run: |
+          set -euo pipefail
+          cd dist
+          cat > SHA256SUMS <<'SUMS_EOF'
+          d5208383fe54db27007ccbf7c89425a6d8d287c958917fcb0265886b0c2ec39f  Sentinel-Mail-Desktop-1.0.0.deb
+          94560e5c346115a7eab8538eab1416a5e1f2c4784f7d967a31cbe33a8cb41e76  Sentinel-Mail-Desktop-1.0.0.exe
+          SUMS_EOF
+          sha256sum -c SHA256SUMS
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<'NOTES_EOF'
+          Desktop edition 1.0.0 of Sentinel Mail for Windows and Linux.
+
+          Assets:
+          - Sentinel-Mail-Desktop-1.0.0.deb - Linux package (.deb), 90,767,284 bytes, SHA-256 d5208383fe54db27007ccbf7c89425a6d8d287c958917fcb0265886b0c2ec39f
+          - Sentinel-Mail-Desktop-1.0.0.exe - Windows installer (.exe), 49,663,488 bytes, SHA-256 94560e5c346115a7eab8538eab1416a5e1f2c4784f7d967a31cbe33a8cb41e76
+
+          These packages are the desktop editions of Sentinel Mail. The Android app is distributed separately.
+          NOTES_EOF
+      - name: Create release or upload assets
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber dist/Sentinel-Mail-Desktop-1.0.0.deb dist/Sentinel-Mail-Desktop-1.0.0.exe
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Sentinel Mail Desktop 1.0.0" --notes-file release-notes.md dist/Sentinel-Mail-Desktop-1.0.0.deb dist/Sentinel-Mail-Desktop-1.0.0.exe
+          fi
