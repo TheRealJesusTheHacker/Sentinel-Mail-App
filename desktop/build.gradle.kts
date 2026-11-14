@@ -189,6 +189,9 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "net.sentinelsafeguard.mailapp.desktop.MainKt"
+        buildTypes.release.proguard {
+            configurationFiles.from("proguard-rules.pro")
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Exe)
             packageName = "sentinel-mail"
